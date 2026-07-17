@@ -1,0 +1,3 @@
+Articolo a due colonne
+Colonna sinistra primo blocco. La conversione da PDF a Markdown richiede la ricostruzione della struttura logica del documento. Titoli, paragrafi, tabelle ed elenchi devono essere riconosciuti a partire dalla sola geometria della pagina.
+Colonna destra secondo blocco. La conversione da PDF a Markdown richiede la ricostruzione della struttura logica del documento. Titoli, paragrafi, tabelle ed elenchi devono essere riconosciuti a partire dalla sola geometria della pagina.

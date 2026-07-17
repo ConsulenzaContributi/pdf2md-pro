@@ -1,0 +1,17 @@
+Report vendite
+Prodotto
+Quantita
+Prezzo
+Totale
+Mele
+10
+2
+20
+Pere
+5
+3
+15
+Uva
+8
+4
+32
