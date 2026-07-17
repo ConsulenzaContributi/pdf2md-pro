@@ -13,3 +13,4 @@ class PageResult:
     markdown: str
     images: tuple[str, ...] = ()
     confidence: float = 1.0
+    engine: str = "native"
