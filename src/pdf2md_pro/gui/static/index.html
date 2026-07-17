@@ -108,9 +108,10 @@
     <section class="col" aria-labelledby="split-h">
       <h2 id="split-h" class="section-title">02 · Partizionatore PDF</h2>
       <fieldset class="card">
-        <legend>Spezza un PDF fuori limite</legend>
-        <label>File PDF
-          <input type="text" id="split-input" class="mono" placeholder="/percorso/documento.pdf">
+        <legend>Spezza i PDF fuori limite</legend>
+        <label>File PDF o cartella da analizzare
+          <input type="text" id="split-input" class="mono"
+                 placeholder="/percorso/cartella  oppure  /percorso/documento.pdf">
         </label>
         <label>Cartella di uscita
           <input type="text" id="split-out" class="mono" placeholder="/percorso/parti">
@@ -124,6 +125,9 @@
           </label>
         </div>
         <button id="split-start" class="secondary">Partiziona</button>
+        <p class="note">Con una cartella: vengono selezionati tutti i PDF che superano
+          i limiti (pagine e/o MB, anche congiunti). Parti nominate
+          <code>nome 03 01.pdf</code> = totale sezioni + numero progressivo.</p>
       </fieldset>
 
       <h2 class="section-title">03 · Registro</h2>

@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from pdf2md_pro.core.batch import BatchConfig, run_batch
-from pdf2md_pro.core.splitter import split_pdf
+from pdf2md_pro.core.splitter import split_folder, split_pdf
 
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_EVENTS = 500
@@ -71,16 +71,25 @@ def _run_convert(payload: dict) -> None:
 
 def _run_split(payload: dict) -> None:
     try:
-        parts = split_pdf(
-            Path(payload["input"]),
-            Path(payload["out_dir"]),
-            payload.get("max_pages") or None,
-            payload.get("max_mb") or None,
-        )
-        names = [str(p) for p in parts]
+        target = Path(payload["input"])
+        out_dir = Path(payload["out_dir"])
+        max_pages = payload.get("max_pages") or None
+        max_mb = payload.get("max_mb") or None
+        if target.is_dir():
+            summary = split_folder(
+                target, out_dir, max_pages, max_mb, progress=_progress
+            )
+            names = [p for parts in summary["split"].values() for p in parts]
+            done = {"status": "split_done", "parts": names,
+                    "skipped": len(summary["skipped"]), "errors": summary["errors"]}
+        else:
+            parts = split_pdf(target, out_dir, max_pages, max_mb)
+            names = [str(p) for p in parts]
+            summary = {"parts": names}
+            done = {"status": "split_done", "parts": names}
         with _LOCK:
-            _JOB["summary"] = {"parts": names}
-            _JOB["events"].append({"status": "split_done", "parts": names})
+            _JOB["summary"] = summary
+            _JOB["events"].append(done)
     except Exception as exc:
         with _LOCK:
             _JOB["error"] = str(exc)

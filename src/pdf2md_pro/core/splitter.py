@@ -4,11 +4,19 @@ Molti LLM accettano al massimo N pagine o M MB per richiesta: questo modulo
 spezza il PDF in parti conformi. Prima chunk per numero di pagine, poi
 bisezione ricorsiva delle parti che superano il limite in byte. Una singola
 pagina sopra il limite non è ulteriormente divisibile: viene tenuta com'è.
+
+Le parti sono nominate `<nome> <totale> <numero>.pdf` (es. `relazione 03 01.pdf`):
+il primo numero è in quante sezioni è stato diviso il file, il secondo la
+posizione della parte.
+
+`split_folder` analizza un'intera cartella e partiziona tutti i file che
+superano i limiti, anche in maniera congiunta (basta superare uno dei fattori).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 import pymupdf
 
@@ -69,8 +77,42 @@ def split_pdf(
             end = min(start + step - 1, doc.page_count - 1)
             pieces.extend(_fit_ranges(doc, start, end, max_bytes))
 
+        total = len(pieces)
         for index, (_, _, data) in enumerate(pieces, start=1):
-            part_path = out_dir / f"{path.stem}_part{index:02d}.pdf"
+            part_path = out_dir / f"{path.stem} {total:02d} {index:02d}.pdf"
             part_path.write_bytes(data)
             parts.append(part_path)
     return parts
+
+
+def split_folder(
+    source_dir: Path,
+    out_dir: Path,
+    max_pages: int | None = None,
+    max_mb: float | None = None,
+    progress: Callable[[dict], None] = lambda e: None,
+) -> dict:
+    """Partiziona tutti i PDF della cartella che superano i limiti.
+
+    Ritorna `{"split": {nome: [parti]}, "skipped": [nomi], "errors": [msg]}`.
+    Un file rotto non ferma l'analisi degli altri.
+    """
+    source = Path(source_dir)
+    if not source.is_dir():
+        raise ValueError(f"cartella non trovata: {source}")
+
+    summary: dict = {"split": {}, "skipped": [], "errors": []}
+    for pdf in sorted(source.glob("*.pdf")):
+        try:
+            if not needs_split(pdf, max_pages, max_mb):
+                summary["skipped"].append(pdf.name)
+                progress({"status": "skip", "file": pdf.name})
+                continue
+            parts = split_pdf(pdf, out_dir, max_pages, max_mb)
+            names = [p.name for p in parts]
+            summary["split"][pdf.name] = names
+            progress({"status": "split", "file": pdf.name, "parts": len(names)})
+        except Exception as exc:
+            summary["errors"].append(f"{pdf.name}: {exc}")
+            progress({"status": "error", "file": pdf.name, "error": str(exc)})
+    return summary
