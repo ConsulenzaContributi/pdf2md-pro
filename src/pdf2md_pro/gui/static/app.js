@@ -45,11 +45,16 @@ function describe(e) {
     case "batch_start": return [`Avvio: ${e.total} file da convertire`, "dim"];
     case "start": return [`[${e.index}/${e.total}] ${e.file} …`, null];
     case "split": return [`  ${e.file} partizionato in ${e.parts} parti`, "dim"];
+    case "skip": return [`  — ${e.file}: già nei limiti`, "dim"];
     case "done": return [`  ✔ ${e.file} → ${(e.outputs || []).join(", ")}`, "ok"];
     case "error": return [`  ✘ ${e.file}: ${e.error}`, "err"];
     case "batch_done":
       return [`Completato: ${e.converted} md prodotti, ${e.errors.length} errori`, e.errors.length ? "err" : "ok"];
-    case "split_done": return [`Parti scritte:\n  ${e.parts.join("\n  ")}`, "ok"];
+    case "split_done": {
+      const extra = e.skipped != null ? `\n(${e.skipped} file già nei limiti)` : "";
+      const errs = (e.errors || []).length ? `\nErrori: ${e.errors.join("; ")}` : "";
+      return [`Parti scritte:\n  ${e.parts.join("\n  ")}${extra}${errs}`, errs ? "err" : "ok"];
+    }
     default: return [JSON.stringify(e), "dim"];
   }
 }
