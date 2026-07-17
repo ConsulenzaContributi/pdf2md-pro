@@ -17,3 +17,6 @@ pdf2md = "pdf2md_pro.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+pdf2md_pro = ["gui/static/*"]
