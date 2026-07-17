@@ -199,11 +199,22 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(port: int = 8347) -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError as exc:
+        print(
+            f"Impossibile avviare sulla porta {port} ({exc}).\n"
+            f"Forse un server è già attivo: apri http://127.0.0.1:{port}/ "
+            f"nel browser, oppure riprova con un'altra porta: pdf2md gui --port 8348",
+            flush=True,
+        )
+        return
     url = f"http://127.0.0.1:{port}/"
-    print(f"pdf2md-pro GUI su {url} (Ctrl+C per uscire)")
+    print(f"pdf2md-pro GUI attiva su {url}", flush=True)
+    print("Lascia aperta questa finestra mentre lavori. Ctrl+C per fermare.", flush=True)
     threading.Timer(0.5, webbrowser.open, args=(url,)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        print("\nServer fermato.", flush=True)
         server.shutdown()
