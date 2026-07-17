@@ -23,20 +23,25 @@ python3 -m venv .venv
 
 ## Interfaccia grafica
 
-**Doppio click su `avvia-gui.command`**: apre il Terminale, avvia il server e
-apre il browser da solo. Lascia quella finestra del Terminale aperta mentre
-lavori; per fermare, chiudila o premi Ctrl+C.
+La GUI è una pagina servita da un piccolo server locale: **serve un processo in
+esecuzione**. Due modi:
 
-In alternativa da terminale:
+**A) Sempre attiva (consigliato) — doppio click su `installa-servizio.command`.**
+Installa un servizio macOS: la GUI resta sempre disponibile su
+`http://127.0.0.1:8347/`, parte da sola al login e si riavvia da sola se si
+blocca. Basta aprire quell'indirizzo quando vuoi. Per disattivarla: doppio click
+su `ferma-servizio.command`.
 
-```bash
-.venv/bin/pdf2md gui        # apre http://127.0.0.1:8347/
-```
+**B) Solo quando serve — doppio click su `avvia-gui.command`.**
+Apre il Terminale, avvia il server e apre il browser. Va tenuta aperta quella
+finestra del Terminale; chiudendola il server si ferma.
 
-> La GUI funziona **solo** avviata così. Aprire `index.html` col doppio click
-> (indirizzo `file://`) non funziona: i pulsanti hanno bisogno del server.
-> Se il browser dice "Connessione negata"/`ERR_CONNECTION_REFUSED`, il server
-> non è in esecuzione — rilancia `avvia-gui.command`.
+Da terminale, equivalente: `.venv/bin/pdf2md gui`.
+
+> Aprire `index.html` col doppio click (indirizzo `file://`) **non** funziona:
+> i pulsanti hanno bisogno del server. Se il browser dice "Connessione
+> negata"/`ERR_CONNECTION_REFUSED`, il server non è in esecuzione — usa il
+> modo A o B qui sopra.
 
 ## Uso da riga di comando
 

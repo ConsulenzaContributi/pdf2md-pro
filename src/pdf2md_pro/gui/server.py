@@ -198,7 +198,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(202, {"ok": True})
 
 
-def serve(port: int = 8347) -> None:
+def serve(port: int = 8347, open_browser: bool = True) -> None:
     try:
         server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     except OSError as exc:
@@ -212,7 +212,8 @@ def serve(port: int = 8347) -> None:
     url = f"http://127.0.0.1:{port}/"
     print(f"pdf2md-pro GUI attiva su {url}", flush=True)
     print("Lascia aperta questa finestra mentre lavori. Ctrl+C per fermare.", flush=True)
-    threading.Timer(0.5, webbrowser.open, args=(url,)).start()
+    if open_browser:
+        threading.Timer(0.5, webbrowser.open, args=(url,)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

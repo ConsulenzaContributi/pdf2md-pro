@@ -130,7 +130,7 @@ def _cmd_split(args) -> int:
 def _cmd_gui(args) -> int:
     from pdf2md_pro.gui.server import serve
 
-    serve(port=args.port)
+    serve(port=args.port, open_browser=not args.no_open)
     return 0
 
 
@@ -176,6 +176,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_gui = sub.add_parser("gui", help="avvia l'interfaccia web locale")
     p_gui.add_argument("--port", type=int, default=8347)
+    p_gui.add_argument("--no-open", action="store_true",
+                       help="non aprire il browser (usato dal servizio in background)")
     p_gui.set_defaults(fn=_cmd_gui)
 
     return parser
