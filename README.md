@@ -4,8 +4,14 @@ Convertitore PDF → Markdown con routing ibrido per pagina e **provenienza
 totale**: ogni blocco Markdown risale alla pagina del PDF sorgente tramite
 sidecar JSON. Locale di default, privacy-first.
 
-Stato: **Fase 2** — pipeline nativa + motore LLM via OpenRouter (ibrido per
-pagina), batch con rinomina per argomento, partizionatore PDF, GUI web locale.
+Stato: **Fase 2** — pipeline nativa + motore LLM ibrido per pagina, batch con
+rinomina per argomento, partizionatore PDF, GUI web locale.
+
+Motori LLM (per scansioni e pagine complesse):
+- **GLM-OCR locale via Ollama** (default): `ollama pull glm-ocr` — gratuito,
+  tutto offline. CLI: `--provider glmocr` (implicito).
+- **OpenRouter** (opzionale): `--provider openrouter` + `OPENROUTER_API_KEY`,
+  modello a scelta (es. `nvidia/nemotron-3-ultra-550b-a55b:free`).
 Roadmap completa in [docs/superpowers/specs/2026-07-17-pdf2md-pro-design.md](docs/superpowers/specs/2026-07-17-pdf2md-pro-design.md).
 
 ## Installazione

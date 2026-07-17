@@ -91,3 +91,27 @@ def test_llm_mode_uses_llm_for_all_pages(engine, mixed_pdf, tmp_path):
     )
     prov = json.loads(result.provenance_path.read_text(encoding="utf-8"))
     assert all(b["engine"].startswith("openrouter:") for b in prov["blocks"])
+
+
+def test_factory_glmocr_local_default():
+    from pdf2md_pro.engines.openrouter import make_llm_engine
+
+    eng = make_llm_engine("glmocr")
+    assert eng.name == "ollama:glm-ocr:latest"
+    assert eng.api_url == "http://127.0.0.1:11434/v1/chat/completions"
+
+
+def test_factory_openrouter_requires_key():
+    from pdf2md_pro.engines.openrouter import make_llm_engine
+
+    with pytest.raises(ValueError):
+        make_llm_engine("openrouter", api_key=None)
+    eng = make_llm_engine("openrouter", api_key="sk-x", model="nvidia/nemotron-3-ultra-550b-a55b:free")
+    assert eng.name == "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"
+
+
+def test_factory_unknown_provider():
+    from pdf2md_pro.engines.openrouter import make_llm_engine
+
+    with pytest.raises(ValueError):
+        make_llm_engine("boh")

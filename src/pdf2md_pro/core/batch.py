@@ -16,7 +16,12 @@ from typing import Callable
 from pdf2md_pro.core.naming import derive_topic, unique_path
 from pdf2md_pro.core.pipeline import ConversionError, convert
 from pdf2md_pro.core.splitter import needs_split, split_pdf
-from pdf2md_pro.engines.openrouter import DEFAULT_MODEL, OpenRouterEngine
+from pdf2md_pro.engines.openrouter import (
+    DEFAULT_OLLAMA_URL,
+    OpenRouterEngine,
+    ensure_ollama,
+    make_llm_engine,
+)
 
 ProgressFn = Callable[[dict], None]
 
@@ -27,8 +32,10 @@ class BatchConfig:
     dest_dir: Path
     max_files: int | None = None
     mode: str = "native"  # native | hybrid | llm
+    provider: str = "glmocr"  # glmocr (locale via Ollama) | openrouter
     api_key: str | None = None
-    model: str = DEFAULT_MODEL
+    model: str | None = None  # None → default del provider
+    ollama_url: str = DEFAULT_OLLAMA_URL
     auto_split: bool = False
     split_pages: int | None = 100
     split_mb: float | None = 10.0
@@ -115,9 +122,14 @@ def run_batch(config: BatchConfig, progress: ProgressFn = lambda e: None) -> dic
 
     llm_engine = None
     if config.mode in ("hybrid", "llm"):
-        if not config.api_key:
-            raise ConversionError("modalità LLM richiesta senza chiave API OpenRouter")
-        llm_engine = OpenRouterEngine(api_key=config.api_key, model=config.model)
+        try:
+            if config.provider == "glmocr":
+                ensure_ollama(config.ollama_url)
+            llm_engine = make_llm_engine(
+                config.provider, config.api_key, config.model, config.ollama_url
+            )
+        except (ValueError, RuntimeError) as exc:
+            raise ConversionError(str(exc)) from exc
 
     pdfs = sorted(source.glob("*.pdf"))[: config.max_files]
     job = _Job(config=config, progress=progress, llm_engine=llm_engine)

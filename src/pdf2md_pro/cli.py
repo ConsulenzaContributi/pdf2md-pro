@@ -78,8 +78,10 @@ def _cmd_batch(args) -> int:
         dest_dir=Path(args.dest),
         max_files=args.max_files,
         mode=args.mode,
+        provider=args.provider,
         api_key=os.environ.get("OPENROUTER_API_KEY"),
         model=args.model,
+        ollama_url=args.ollama_url,
         auto_split=args.auto_split,
         split_pages=args.split_pages,
         split_mb=args.split_mb,
@@ -141,7 +143,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_batch.add_argument("dest")
     p_batch.add_argument("--max-files", type=int)
     p_batch.add_argument("--mode", choices=["native", "hybrid", "llm"], default="native")
-    p_batch.add_argument("--model", default="z-ai/glm-4.5v")
+    p_batch.add_argument(
+        "--provider", choices=["glmocr", "openrouter"], default="glmocr",
+        help="glmocr = GLM-OCR locale via Ollama (default); openrouter = cloud",
+    )
+    p_batch.add_argument("--model", default=None, help="default: glm-ocr:latest (locale) o z-ai/glm-4.5v (OpenRouter)")
+    p_batch.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     p_batch.add_argument("--auto-split", action="store_true")
     p_batch.add_argument("--split-pages", type=int, default=100)
     p_batch.add_argument("--split-mb", type=float, default=10.0)
