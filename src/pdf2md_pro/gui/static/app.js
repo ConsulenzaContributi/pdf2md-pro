@@ -14,6 +14,31 @@ const convertPartsBtn = $("convert-parts");
 let pollTimer = null;
 let renderedEvents = 0;
 
+// La GUI deve girare tramite il server (`pdf2md gui`): aperta come file
+// locale, le chiamate /api/* falliscono con "Failed to fetch".
+const OFFLINE = location.protocol === "file:";
+const OFFLINE_MSG =
+  "Questa pagina è stata aperta come file. Avviala dal terminale con "
+  + "'pdf2md gui' (si apre su http://127.0.0.1:8347) — solo così i pulsanti funzionano.";
+
+function offlineBlocked() {
+  if (OFFLINE) {
+    addLog(OFFLINE_MSG, "err");
+    return true;
+  }
+  return false;
+}
+
+// "Failed to fetch" (TypeError) = server non raggiungibile: messaggio utile.
+function fetchErrorText(err) {
+  if (err instanceof TypeError) {
+    return OFFLINE
+      ? OFFLINE_MSG
+      : "Server non raggiungibile: la finestra 'pdf2md gui' è ancora attiva nel terminale?";
+  }
+  return err.message;
+}
+
 document.querySelectorAll('input[name="mode"]').forEach((radio) =>
   radio.addEventListener("change", () => {
     const mode = document.querySelector('input[name="mode"]:checked').value;
@@ -32,14 +57,15 @@ document.querySelectorAll('input[name="provider"]').forEach((radio) =>
 // pulsanti "Sfoglia…": aprono il Finder lato server (osascript)
 document.querySelectorAll("button.browse").forEach((btn) =>
   btn.addEventListener("click", async () => {
+    if (offlineBlocked()) return;
     btn.disabled = true;
     try {
       const r = await fetch(`/api/pick?kind=${btn.dataset.pick}`);
       const d = await r.json();
       if (d.path) $(btn.dataset.target).value = d.path;
       else if (d.error) addLog(d.error, "err");
-    } catch {
-      addLog("Selettore non disponibile.", "err");
+    } catch (e) {
+      addLog(fetchErrorText(e), "err");
     } finally {
       btn.disabled = false;
     }
@@ -154,6 +180,7 @@ function buildConvertPayload(sourceDir) {
 }
 
 function submitConvert(payload) {
+  if (offlineBlocked()) return;
   if (!payload.source_dir || !payload.dest_dir) {
     addLog("Indicare cartella sorgente e destinazione.", "err");
     return;
@@ -163,7 +190,7 @@ function submitConvert(payload) {
     return;
   }
   beginJob();
-  post("/api/convert", payload).catch((e) => { addLog("ERRORE: " + e.message, "err"); stopPolling(); });
+  post("/api/convert", payload).catch((e) => { addLog("ERRORE: " + fetchErrorText(e), "err"); stopPolling(); });
 }
 
 startBtn.addEventListener("click", () =>
@@ -182,6 +209,7 @@ convertPartsBtn.addEventListener("click", () => {
 
 // passo 1 del partizionatore: analisi preliminare, nessuna scrittura
 analyzeBtn.addEventListener("click", async () => {
+  if (offlineBlocked()) return;
   const payload = {
     source_dir: $("split-input").value.trim(),
     max_pages: num("tool-max-pages"),
@@ -219,13 +247,14 @@ analyzeBtn.addEventListener("click", async () => {
     });
     addLog(`Analisi completata: ${over} file da partizionare su ${d.files.length}.`, over ? "ok" : "dim");
   } catch (e) {
-    addLog("ERRORE analisi: " + e.message, "err");
+    addLog("ERRORE analisi: " + fetchErrorText(e), "err");
   } finally {
     analyzeBtn.disabled = false;
   }
 });
 
 splitBtn.addEventListener("click", () => {
+  if (offlineBlocked()) return;
   const payload = {
     input: $("split-input").value.trim(),
     out_dir: $("split-out").value.trim(),
@@ -241,5 +270,8 @@ splitBtn.addEventListener("click", () => {
     return;
   }
   beginJob();
-  post("/api/split", payload).catch((e) => { addLog("ERRORE: " + e.message, "err"); stopPolling(); });
+  post("/api/split", payload).catch((e) => { addLog("ERRORE: " + fetchErrorText(e), "err"); stopPolling(); });
 });
+
+// Avviso immediato se la pagina è stata aperta come file locale.
+if (OFFLINE) addLog(OFFLINE_MSG, "err");

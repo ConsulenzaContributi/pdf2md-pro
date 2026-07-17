@@ -44,11 +44,19 @@ def _progress(event: dict) -> None:
             _JOB["done"] = event.get("index", _JOB["done"])
 
 
+def _clean_path(raw: str) -> Path:
+    """Normalizza percorsi incollati: rimuove apici e backslash di escape
+    shell (`Crucial\\ X9` → `Crucial X9`), che altrimenti non esistono su disco."""
+    text = (raw or "").strip().strip("'\"")
+    text = text.replace("\\ ", " ")  # spazi shell-escaped incollati a mano
+    return Path(text)
+
+
 def _run_convert(payload: dict) -> None:
     try:
         config = BatchConfig(
-            source_dir=Path(payload["source_dir"]),
-            dest_dir=Path(payload["dest_dir"]),
+            source_dir=_clean_path(payload["source_dir"]),
+            dest_dir=_clean_path(payload["dest_dir"]),
             max_files=payload.get("max_files") or None,
             mode=payload.get("mode", "native"),
             provider=payload.get("provider", "glmocr"),
@@ -73,8 +81,8 @@ def _run_convert(payload: dict) -> None:
 
 def _run_split(payload: dict) -> None:
     try:
-        target = Path(payload["input"])
-        out_dir = Path(payload["out_dir"])
+        target = _clean_path(payload["input"])
+        out_dir = _clean_path(payload["out_dir"])
         max_pages = payload.get("max_pages") or None
         max_mb = payload.get("max_mb") or None
         if target.is_dir():
@@ -167,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/analyze":  # sincrono: sola lettura, veloce
             try:
                 report = analyze_folder(
-                    Path(payload["source_dir"]),
+                    _clean_path(payload["source_dir"]),
                     payload.get("max_pages") or None,
                     payload.get("max_mb") or None,
                 )
