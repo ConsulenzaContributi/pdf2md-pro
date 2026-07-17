@@ -23,6 +23,14 @@ import pymupdf
 MB = 1024 * 1024
 
 
+def list_pdfs(folder: Path) -> list[Path]:
+    """PDF reali della cartella, ordinati. Esclude i file nascosti e gli
+    AppleDouble di macOS (`._nome.pdf`), che non sono documenti veri."""
+    return sorted(
+        p for p in Path(folder).glob("*.pdf") if not p.name.startswith(".")
+    )
+
+
 def needs_split(path: Path, max_pages: int | None, max_mb: float | None) -> bool:
     path = Path(path)
     if max_mb is not None and path.stat().st_size > max_mb * MB:
@@ -99,7 +107,7 @@ def analyze_folder(
         raise ValueError(f"cartella non trovata: {source}")
 
     report = []
-    for pdf in sorted(source.glob("*.pdf")):
+    for pdf in list_pdfs(source):
         entry: dict = {"file": pdf.name}
         try:
             size_mb = pdf.stat().st_size / MB
@@ -137,7 +145,7 @@ def split_folder(
         raise ValueError(f"cartella non trovata: {source}")
 
     summary: dict = {"split": {}, "skipped": [], "errors": []}
-    for pdf in sorted(source.glob("*.pdf")):
+    for pdf in list_pdfs(source):
         try:
             if not needs_split(pdf, max_pages, max_mb):
                 summary["skipped"].append(pdf.name)
