@@ -53,8 +53,10 @@
           <div id="openrouter-fields" hidden>
             <label>Chiave API OpenRouter
               <input type="password" id="api-key" autocomplete="off"
-                     placeholder="sk-or-…  (resta in memoria, mai salvata)">
+                     placeholder="sk-or-…">
             </label>
+            <label class="check"><input type="checkbox" id="remember-key">
+              <span>Ricorda la chiave su questo computer</span></label>
             <label>Modello
               <input type="text" id="model" list="models" value="z-ai/glm-4.5v">
               <datalist id="models">
@@ -108,7 +110,9 @@
 
       <button id="start" class="primary">Avvia conversione</button>
       <p class="note">I file .md sono rinominati per argomento (max 10 caratteri).
-        Ogni conversione produce anche il sidecar <code>.provenance.json</code>.</p>
+        Ogni conversione produce anche il sidecar <code>.provenance.json</code>.
+        Le impostazioni vengono salvate automaticamente e ricaricate al prossimo avvio
+        (la chiave API solo se spunti "Ricorda la chiave").</p>
     </section>
 
     <section class="col" aria-labelledby="split-h">
