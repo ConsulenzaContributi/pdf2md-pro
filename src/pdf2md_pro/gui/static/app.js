@@ -39,20 +39,66 @@ function fetchErrorText(err) {
   return err.message;
 }
 
-document.querySelectorAll('input[name="mode"]').forEach((radio) =>
-  radio.addEventListener("change", () => {
-    const mode = document.querySelector('input[name="mode"]:checked').value;
-    $("llm-fields").hidden = mode === "native";
-  })
-);
+function checkedValue(name) {
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : null;
+}
 
-document.querySelectorAll('input[name="provider"]').forEach((radio) =>
-  radio.addEventListener("change", () => {
-    const provider = document.querySelector('input[name="provider"]:checked').value;
-    $("glmocr-fields").hidden = provider !== "glmocr";
-    $("openrouter-fields").hidden = provider !== "openrouter";
-  })
-);
+function syncConditionalFields() {
+  $("llm-fields").hidden = checkedValue("mode") === "native";
+  const provider = checkedValue("provider");
+  $("glmocr-fields").hidden = provider !== "glmocr";
+  $("openrouter-fields").hidden = provider !== "openrouter";
+}
+
+document
+  .querySelectorAll('input[name="mode"], input[name="provider"]')
+  .forEach((radio) => radio.addEventListener("change", syncConditionalFields));
+
+// --- Persistenza impostazioni (localStorage, per questo browser locale) ---
+const CONFIG_KEY = "pdf2md-pro:config:v1";
+const TEXT_IDS = [
+  "local-model", "ollama-url", "model", "source-dir", "dest-dir", "max-files",
+  "split-pages", "split-mb", "split-input", "split-out",
+  "tool-max-pages", "tool-max-mb",
+];
+const CHECK_IDS = ["extract-images", "auto-split", "remember-key"];
+const RADIO_NAMES = ["mode", "provider"];
+
+function saveConfig() {
+  const cfg = { text: {}, check: {}, radio: {} };
+  TEXT_IDS.forEach((id) => { cfg.text[id] = $(id).value; });
+  CHECK_IDS.forEach((id) => { cfg.check[id] = $(id).checked; });
+  RADIO_NAMES.forEach((name) => { cfg.radio[name] = checkedValue(name); });
+  // la chiave API è un segreto: salvata solo con consenso esplicito
+  cfg.text["api-key"] = $("remember-key").checked ? $("api-key").value : "";
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+  } catch { /* storage pieno o disabilitato: si prosegue senza persistenza */ }
+}
+
+function restoreConfig() {
+  let cfg;
+  try {
+    cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
+  } catch { cfg = null; }
+  if (!cfg) return;
+  Object.entries(cfg.text || {}).forEach(([id, v]) => { if ($(id) != null) $(id).value = v; });
+  Object.entries(cfg.check || {}).forEach(([id, v]) => { if ($(id) != null) $(id).checked = v; });
+  Object.entries(cfg.radio || {}).forEach(([name, v]) => {
+    const el = document.querySelector(`input[name="${name}"][value="${v}"]`);
+    if (el) el.checked = true;
+  });
+  if (!$("remember-key").checked) $("api-key").value = "";
+  syncConditionalFields();
+}
+
+restoreConfig();
+// salva a ogni modifica di qualunque campo del form
+document.querySelectorAll("input, select").forEach((el) => {
+  el.addEventListener("change", saveConfig);
+  el.addEventListener("input", saveConfig);
+});
 
 // pulsanti "Sfoglia…": aprono il Finder lato server (osascript)
 document.querySelectorAll("button.browse").forEach((btn) =>
