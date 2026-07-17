@@ -63,8 +63,9 @@ def make_tables() -> tuple[pymupdf.Document, str]:
         for c, cell in enumerate(row):
             rect = pymupdf.Rect(x0 + c * cw, y0 + r * ch, x0 + (c + 1) * cw, y0 + (r + 1) * ch)
             page.draw_rect(rect, color=(0, 0, 0), width=0.5)
-            page.insert_textbox(
-                rect + (4, 4, -4, -4), cell, fontsize=10, fontname="helv"
+            # insert_text non scarta mai il testo (insert_textbox sì, se non entra)
+            page.insert_text(
+                pymupdf.Point(rect.x0 + 4, rect.y1 - 8), cell, fontsize=10, fontname="helv"
             )
     words = ["Report vendite"] + headers + [c for row in rows for c in row]
     return doc, "\n".join(words)
