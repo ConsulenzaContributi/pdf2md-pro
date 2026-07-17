@@ -85,6 +85,41 @@ def split_pdf(
     return parts
 
 
+def analyze_folder(
+    source_dir: Path,
+    max_pages: int | None = None,
+    max_mb: float | None = None,
+) -> list[dict]:
+    """Analisi preliminare: per ogni PDF pagine, dimensione e limiti superati.
+
+    Non scrive nulla. `needs_split` è vero se almeno un fattore è oltre.
+    """
+    source = Path(source_dir)
+    if not source.is_dir():
+        raise ValueError(f"cartella non trovata: {source}")
+
+    report = []
+    for pdf in sorted(source.glob("*.pdf")):
+        entry: dict = {"file": pdf.name}
+        try:
+            size_mb = pdf.stat().st_size / MB
+            with pymupdf.open(pdf) as doc:
+                pages = doc.page_count
+            over_pages = max_pages is not None and pages > max_pages
+            over_mb = max_mb is not None and size_mb > max_mb
+            entry.update(
+                pages=pages,
+                mb=round(size_mb, 2),
+                over_pages=over_pages,
+                over_mb=over_mb,
+                needs_split=over_pages or over_mb,
+            )
+        except Exception as exc:
+            entry["error"] = str(exc)
+        report.append(entry)
+    return report
+
+
 def split_folder(
     source_dir: Path,
     out_dir: Path,

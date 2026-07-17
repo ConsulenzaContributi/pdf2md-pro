@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>pdf2md-pro — console</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="banner" class="banner" hidden aria-live="polite">
@@ -29,7 +29,7 @@
         <legend>Motore</legend>
         <div class="radio-row" role="radiogroup" aria-label="Modalità motore">
           <label class="radio"><input type="radio" name="mode" value="native" checked>
-            <span><strong>Nativo</strong><small>solo parser locale, offline</small></span></label>
+            <span><strong>Nativo</strong><small>motore locale PyMuPDF4LLM + OCR Tesseract — tutto offline</small></span></label>
           <label class="radio"><input type="radio" name="mode" value="hybrid">
             <span><strong>Ibrido</strong><small>LLM solo su scansioni e pagine complesse</small></span></label>
           <label class="radio"><input type="radio" name="mode" value="llm">
@@ -72,10 +72,16 @@
       <fieldset class="card">
         <legend>Cartelle</legend>
         <label>Cartella sorgente (PDF)
-          <input type="text" id="source-dir" class="mono" placeholder="/percorso/cartella/pdf">
+          <span class="browse-row">
+            <input type="text" id="source-dir" class="mono" placeholder="/percorso/cartella/pdf">
+            <button type="button" class="browse" data-pick="folder" data-target="source-dir">Sfoglia…</button>
+          </span>
         </label>
         <label>Cartella destinazione (MD)
-          <input type="text" id="dest-dir" class="mono" placeholder="/percorso/cartella/markdown">
+          <span class="browse-row">
+            <input type="text" id="dest-dir" class="mono" placeholder="/percorso/cartella/markdown">
+            <button type="button" class="browse" data-pick="folder" data-target="dest-dir">Sfoglia…</button>
+          </span>
         </label>
         <div class="grid-2">
           <label>Numero massimo file
@@ -109,12 +115,19 @@
       <h2 id="split-h" class="section-title">02 · Partizionatore PDF</h2>
       <fieldset class="card">
         <legend>Spezza i PDF fuori limite</legend>
-        <label>File PDF o cartella da analizzare
-          <input type="text" id="split-input" class="mono"
-                 placeholder="/percorso/cartella  oppure  /percorso/documento.pdf">
+        <label>Cartella (o singolo PDF) da analizzare
+          <span class="browse-row">
+            <input type="text" id="split-input" class="mono"
+                   placeholder="/percorso/cartella  oppure  /percorso/documento.pdf">
+            <button type="button" class="browse" data-pick="folder" data-target="split-input">Cartella…</button>
+            <button type="button" class="browse" data-pick="file" data-target="split-input">File…</button>
+          </span>
         </label>
-        <label>Cartella di uscita
-          <input type="text" id="split-out" class="mono" placeholder="/percorso/parti">
+        <label>Cartella di uscita delle parti
+          <span class="browse-row">
+            <input type="text" id="split-out" class="mono" placeholder="/percorso/parti">
+            <button type="button" class="browse" data-pick="folder" data-target="split-out">Sfoglia…</button>
+          </span>
         </label>
         <div class="grid-2">
           <label>Massimo pagine
@@ -124,10 +137,14 @@
             <input type="number" id="tool-max-mb" min="0.1" step="0.1" placeholder="es. 10">
           </label>
         </div>
-        <button id="split-start" class="secondary">Partiziona</button>
-        <p class="note">Con una cartella: vengono selezionati tutti i PDF che superano
-          i limiti (pagine e/o MB, anche congiunti). Parti nominate
-          <code>nome 03 01.pdf</code> = totale sezioni + numero progressivo.</p>
+        <button id="analyze-start" class="secondary">1 · Analizza i file oltre i limiti</button>
+        <button id="split-start" class="secondary">2 · Partiziona i file selezionati</button>
+        <button id="convert-parts" class="secondary">3 · Elabora gli MD dalle parti</button>
+        <p class="note">L'analisi è preliminare e non scrive nulla: elenca ogni PDF con
+          pagine, MB e quali limiti supera (anche congiunti). La partizione produce parti
+          <code>nome 03 01.pdf</code> = totale sezioni + numero progressivo. Il passo 3
+          converte la cartella di uscita in Markdown usando motore e destinazione
+          della sezione 01.</p>
       </fieldset>
 
       <h2 class="section-title">03 · Registro</h2>
@@ -141,6 +158,6 @@
     <span>Locale al 100% — anche il motore LLM (GLM-OCR via Ollama). Nessun dato lascia questa macchina, salvo scelta esplicita del provider OpenRouter.</span>
   </footer>
 
-  <script src="/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

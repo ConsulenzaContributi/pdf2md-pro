@@ -163,6 +163,16 @@ button:disabled { opacity: 0.45; cursor: wait; }
   border: 1px solid var(--accent-deep);
 }
 .secondary:hover:not(:disabled) { background: oklch(78% 0.16 75 / 0.1); }
+.secondary + .secondary { margin-top: 0.5rem; }
+
+.browse-row { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
+.browse-row input { margin-top: 0; flex: 1; }
+.browse {
+  flex: none; padding: 0.45rem 0.8rem; font-size: 0.82rem; font-weight: 600;
+  background: var(--bg-inset); color: var(--text-dim);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.browse:hover:not(:disabled) { color: var(--accent); border-color: var(--accent-deep); }
 
 .note { color: var(--text-dim); font-size: 0.82rem; margin-top: 0.8rem; }
 .note code { color: var(--accent); }
