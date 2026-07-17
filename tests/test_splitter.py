@@ -101,3 +101,23 @@ def test_split_folder_joint_limits(tmp_path):
         src, tmp_path / "out", max_pages=3, max_mb=size_mb * 0.9
     )
     assert set(summary["split"]) == {"tante_pagine.pdf", "pesante.pdf"}
+
+
+def test_analyze_folder_reports_limits(tmp_path):
+    from pdf2md_pro.core.splitter import analyze_folder
+
+    src = tmp_path / "src"
+    src.mkdir()
+    _make_pdf(src / "grande.pdf", 5)
+    _make_pdf(src / "piccolo.pdf", 2)
+    (src / "rotto.pdf").write_bytes(b"x")
+
+    report = analyze_folder(src, max_pages=3, max_mb=None)
+    by_name = {e["file"]: e for e in report}
+
+    assert by_name["grande.pdf"]["needs_split"] is True
+    assert by_name["grande.pdf"]["over_pages"] is True
+    assert by_name["grande.pdf"]["over_mb"] is False
+    assert by_name["grande.pdf"]["pages"] == 5
+    assert by_name["piccolo.pdf"]["needs_split"] is False
+    assert "error" in by_name["rotto.pdf"]

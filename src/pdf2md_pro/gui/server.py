@@ -8,13 +8,15 @@ form, vive solo in memoria e non viene mai scritta su disco né loggata.
 from __future__ import annotations
 
 import json
+import subprocess
 import threading
+import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from pdf2md_pro.core.batch import BatchConfig, run_batch
-from pdf2md_pro.core.splitter import split_folder, split_pdf
+from pdf2md_pro.core.splitter import analyze_folder, split_folder, split_pdf
 
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_EVENTS = 500
@@ -98,6 +100,27 @@ def _run_split(payload: dict) -> None:
             _JOB["running"] = False
 
 
+def _pick_path(kind: str) -> dict:
+    """Apre il Finder (macOS) per scegliere cartella o PDF. ponytail: solo
+    macOS via osascript; su altri OS restare sull'inserimento manuale."""
+    if kind == "file":
+        script = 'POSIX path of (choose file of type {"com.adobe.pdf"} with prompt "Seleziona un PDF")'
+    else:
+        script = 'POSIX path of (choose folder with prompt "Seleziona una cartella")'
+    try:
+        out = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=300,
+        )
+    except FileNotFoundError:
+        return {"error": "selettore disponibile solo su macOS"}
+    except subprocess.TimeoutExpired:
+        return {"cancelled": True}
+    if out.returncode != 0:  # utente ha annullato
+        return {"cancelled": True}
+    return {"path": out.stdout.strip().rstrip("/")}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "pdf2md-pro"
 
@@ -115,17 +138,21 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(data).encode(), "application/json")
 
     def do_GET(self) -> None:  # noqa: N802 (API BaseHTTPRequestHandler)
+        parsed = urllib.parse.urlparse(self.path)
         routes = {
             "/": ("index.html", "text/html; charset=utf-8"),
             "/style.css": ("style.css", "text/css"),
             "/app.js": ("app.js", "application/javascript"),
         }
-        if self.path in routes:
-            filename, content_type = routes[self.path]
+        if parsed.path in routes:
+            filename, content_type = routes[parsed.path]
             self._send(200, (STATIC_DIR / filename).read_bytes(), content_type)
-        elif self.path == "/api/state":
+        elif parsed.path == "/api/state":
             with _LOCK:
                 self._send_json(200, dict(_JOB))
+        elif parsed.path == "/api/pick":
+            kind = urllib.parse.parse_qs(parsed.query).get("kind", ["folder"])[0]
+            self._send_json(200, _pick_path(kind))
         else:
             self._send_json(404, {"error": "non trovato"})
 
@@ -135,6 +162,18 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
             self._send_json(400, {"error": "JSON non valido"})
+            return
+
+        if self.path == "/api/analyze":  # sincrono: sola lettura, veloce
+            try:
+                report = analyze_folder(
+                    Path(payload["source_dir"]),
+                    payload.get("max_pages") or None,
+                    payload.get("max_mb") or None,
+                )
+                self._send_json(200, {"files": report})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
             return
 
         targets = {"/api/convert": ("convert", _run_convert), "/api/split": ("split", _run_split)}
