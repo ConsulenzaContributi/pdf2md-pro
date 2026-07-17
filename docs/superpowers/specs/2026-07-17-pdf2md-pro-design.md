@@ -75,9 +75,9 @@ Fase 1: granularità a livello pagina. Bbox per blocco in fase successiva.
 
 | Fase | Contenuto | Criterio di uscita |
 |---|---|---|
-| 0 | Corpus sintetico + harness di valutazione | `run_eval.py` produce score per ogni PDF del corpus |
-| 1 | Pipeline nativa + provenienza + immagini + CLI | `pdf2md file.pdf` produce .md + .provenance.json + assets; eval ≥ 0.9 sui PDF nativi |
-| 2 | Classificatore pagina + OCR locale | scansioni convertite senza intervento |
+| 0 ✅ | Corpus sintetico + harness di valutazione | `run_eval.py` produce score per ogni PDF del corpus |
+| 1 ✅ | Pipeline nativa + provenienza + immagini + CLI | `pdf2md file.pdf` produce .md + .provenance.json + assets; eval ≥ 0.9 sui PDF nativi |
+| 2 ✅ | Classificatore pagina + motore LLM (OpenRouter, vision) con routing ibrido; batch cartella→cartella con rinomina per argomento (≤10 char); partizionatore PDF (limiti pagine/MB); GUI web locale con banner avanzamento | scansioni instradate al VLM; GUI converte il corpus end-to-end |
 | 3 | Layout intelligente (multi-colonna, header/footer, footnote, heading) | eval sui PDF multi-colonna sale |
 | 4 | Tabelle doppia validazione + VLM + immagini semantiche | tabelle GFM corrette sul corpus |
 | 5 | GUI review side-by-side con confidence | correzione umana per blocco |

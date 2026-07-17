@@ -4,7 +4,8 @@ Convertitore PDF → Markdown con routing ibrido per pagina e **provenienza
 totale**: ogni blocco Markdown risale alla pagina del PDF sorgente tramite
 sidecar JSON. Locale di default, privacy-first.
 
-Stato: **Fase 1** — pipeline nativa (pymupdf4llm), provenienza, immagini, CLI.
+Stato: **Fase 2** — pipeline nativa + motore LLM via OpenRouter (ibrido per
+pagina), batch con rinomina per argomento, partizionatore PDF, GUI web locale.
 Roadmap completa in [docs/superpowers/specs/2026-07-17-pdf2md-pro-design.md](docs/superpowers/specs/2026-07-17-pdf2md-pro-design.md).
 
 ## Installazione

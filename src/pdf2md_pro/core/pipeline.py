@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pymupdf
 
+from pdf2md_pro.core.classifier import NATIVE, classify_pdf
 from pdf2md_pro.core.provenance import build_provenance, sha256_file
 from pdf2md_pro.engines.native import NativeEngine
 from pdf2md_pro.output.writer import render_frontmatter, write_output
@@ -27,12 +28,41 @@ class ConversionResult:
     blocks: tuple[dict, ...]
 
 
+def _run_engines(
+    pdf_path: Path,
+    image_dir: Path | None,
+    pages: list[int] | None,
+    llm_engine,
+    mode: str,
+):
+    """Ritorna (risultati ordinati per pagina, etichetta motore complessivo)."""
+    native = NativeEngine()
+    if mode == "native" or llm_engine is None:
+        return native.convert(pdf_path, image_dir=image_dir, pages=pages), native.name
+    if mode == "llm":
+        return llm_engine.convert(pdf_path, pages=pages), llm_engine.name
+
+    # hybrid: parser nativo dove c'è testo, LLM su scansioni/pagine complesse
+    classes = classify_pdf(pdf_path, pages)
+    native_pages = [n for n, c in classes.items() if c == NATIVE]
+    llm_pages = [n for n, c in classes.items() if c != NATIVE]
+    results = []
+    if native_pages:
+        results.extend(native.convert(pdf_path, image_dir=image_dir, pages=native_pages))
+    if llm_pages:
+        results.extend(llm_engine.convert(pdf_path, pages=llm_pages))
+    results.sort(key=lambda r: r.page_number)
+    return results, f"hybrid({native.name}+{llm_engine.name})"
+
+
 def convert(
     pdf_path: Path,
     out_dir: Path,
     force: bool = False,
     pages: list[int] | None = None,
     extract_images: bool = True,
+    llm_engine=None,
+    mode: str = "native",
 ) -> ConversionResult:
     pdf_path = Path(pdf_path)
     out_dir = Path(out_dir)
@@ -58,9 +88,12 @@ def convert(
             raise ConversionError(f"output esistente (usa --force): {existing}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    engine = NativeEngine()
-    results = engine.convert(
-        pdf_path, image_dir=image_dir if extract_images else None, pages=pages
+    results, engine_label = _run_engines(
+        pdf_path,
+        image_dir if extract_images else None,
+        pages,
+        llm_engine,
+        mode,
     )
 
     digest = sha256_file(pdf_path)
@@ -69,7 +102,7 @@ def convert(
         "source": pdf_path.name,
         "sha256": digest,
         "pages": page_count,
-        "engine": f"{engine.name} {engine.version}",
+        "engine": engine_label,
         "converted": date.today().isoformat(),
     }
 
@@ -85,7 +118,7 @@ def convert(
         blocks.append(
             {
                 "page": result.page_number,
-                "engine": engine.name,
+                "engine": result.engine,
                 "confidence": result.confidence,
                 "md_start_line": line,
                 "md_end_line": line + max(n_lines - 1, 0),
@@ -95,7 +128,7 @@ def convert(
 
     write_output("\n".join(body_parts), frontmatter, markdown_path)
     provenance = build_provenance(
-        pdf_path, digest, page_count, engine.name, engine.version, blocks
+        pdf_path, digest, page_count, engine_label, NativeEngine.version, blocks
     )
     provenance_path.write_text(
         json.dumps(provenance, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"

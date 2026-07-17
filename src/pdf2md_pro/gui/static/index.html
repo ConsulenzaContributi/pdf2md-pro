@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pdf2md-pro — console</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="banner" class="banner" hidden aria-live="polite">
+    <div class="banner-track"><div id="banner-fill" class="banner-fill"></div></div>
+    <div class="banner-meta">
+      <span id="banner-label">In lavorazione…</span>
+      <span id="banner-count" class="mono"></span>
+    </div>
+  </div>
+
+  <header class="masthead">
+    <h1>pdf2md<span class="accent">·</span>pro</h1>
+    <p class="tagline">Trascrizione PDF → Markdown per contenuti tecnico-accademici.
+      Tabelle, formule, figure descritte, provenienza per pagina.</p>
+  </header>
+
+  <main class="layout">
+    <section class="col" aria-labelledby="conv-h">
+      <h2 id="conv-h" class="section-title">01 · Conversione</h2>
+
+      <fieldset class="card">
+        <legend>Motore</legend>
+        <div class="radio-row" role="radiogroup" aria-label="Modalità motore">
+          <label class="radio"><input type="radio" name="mode" value="native" checked>
+            <span><strong>Nativo</strong><small>solo parser locale, offline</small></span></label>
+          <label class="radio"><input type="radio" name="mode" value="hybrid">
+            <span><strong>Ibrido</strong><small>LLM solo su scansioni e pagine complesse</small></span></label>
+          <label class="radio"><input type="radio" name="mode" value="llm">
+            <span><strong>LLM totale</strong><small>ogni pagina via modello vision</small></span></label>
+        </div>
+        <div id="llm-fields" class="stack" hidden>
+          <label>Chiave API OpenRouter
+            <input type="password" id="api-key" autocomplete="off"
+                   placeholder="sk-or-…  (resta in memoria, mai salvata)">
+          </label>
+          <label>Modello
+            <input type="text" id="model" list="models" value="z-ai/glm-4.5v">
+            <datalist id="models">
+              <option value="z-ai/glm-4.5v"></option>
+              <option value="google/gemini-2.5-flash"></option>
+              <option value="anthropic/claude-sonnet-4.5"></option>
+              <option value="qwen/qwen2.5-vl-72b-instruct"></option>
+            </datalist>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>Cartelle</legend>
+        <label>Cartella sorgente (PDF)
+          <input type="text" id="source-dir" class="mono" placeholder="/percorso/cartella/pdf">
+        </label>
+        <label>Cartella destinazione (MD)
+          <input type="text" id="dest-dir" class="mono" placeholder="/percorso/cartella/markdown">
+        </label>
+        <div class="grid-2">
+          <label>Numero massimo file
+            <input type="number" id="max-files" min="1" placeholder="tutti">
+          </label>
+          <label class="check"><input type="checkbox" id="extract-images" checked>
+            <span>Estrai immagini in <code>assets/</code></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>Partizionamento automatico</legend>
+        <label class="check"><input type="checkbox" id="auto-split">
+          <span>Partiziona i PDF oltre i limiti prima di convertirli</span></label>
+        <div class="grid-2">
+          <label>Massimo pagine
+            <input type="number" id="split-pages" min="1" value="100">
+          </label>
+          <label>Massimo MB
+            <input type="number" id="split-mb" min="0.1" step="0.1" value="10">
+          </label>
+        </div>
+      </fieldset>
+
+      <button id="start" class="primary">Avvia conversione</button>
+      <p class="note">I file .md sono rinominati per argomento (max 10 caratteri).
+        Ogni conversione produce anche il sidecar <code>.provenance.json</code>.</p>
+    </section>
+
+    <section class="col" aria-labelledby="split-h">
+      <h2 id="split-h" class="section-title">02 · Partizionatore PDF</h2>
+      <fieldset class="card">
+        <legend>Spezza un PDF fuori limite</legend>
+        <label>File PDF
+          <input type="text" id="split-input" class="mono" placeholder="/percorso/documento.pdf">
+        </label>
+        <label>Cartella di uscita
+          <input type="text" id="split-out" class="mono" placeholder="/percorso/parti">
+        </label>
+        <div class="grid-2">
+          <label>Massimo pagine
+            <input type="number" id="tool-max-pages" min="1" placeholder="es. 100">
+          </label>
+          <label>Massimo MB
+            <input type="number" id="tool-max-mb" min="0.1" step="0.1" placeholder="es. 10">
+          </label>
+        </div>
+        <button id="split-start" class="secondary">Partiziona</button>
+      </fieldset>
+
+      <h2 class="section-title">03 · Registro</h2>
+      <div id="log" class="log mono" aria-live="polite">
+        <div class="log-line dim">In attesa di un job…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Locale al 100% — nessun dato lascia questa macchina salvo modalità LLM verso OpenRouter.</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
