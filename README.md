@@ -21,7 +21,24 @@ python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
 ```
 
-## Uso
+## Interfaccia grafica
+
+**Doppio click su `avvia-gui.command`**: apre il Terminale, avvia il server e
+apre il browser da solo. Lascia quella finestra del Terminale aperta mentre
+lavori; per fermare, chiudila o premi Ctrl+C.
+
+In alternativa da terminale:
+
+```bash
+.venv/bin/pdf2md gui        # apre http://127.0.0.1:8347/
+```
+
+> La GUI funziona **solo** avviata così. Aprire `index.html` col doppio click
+> (indirizzo `file://`) non funziona: i pulsanti hanno bisogno del server.
+> Se il browser dice "Connessione negata"/`ERR_CONNECTION_REFUSED`, il server
+> non è in esecuzione — rilancia `avvia-gui.command`.
+
+## Uso da riga di comando
 
 ```bash
 pdf2md documento.pdf -o output/          # converte, estrae immagini in output/assets/
