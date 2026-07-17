@@ -121,3 +121,27 @@ def test_analyze_folder_reports_limits(tmp_path):
     assert by_name["grande.pdf"]["pages"] == 5
     assert by_name["piccolo.pdf"]["needs_split"] is False
     assert "error" in by_name["rotto.pdf"]
+
+
+def test_list_pdfs_skips_appledouble_and_hidden(tmp_path):
+    from pdf2md_pro.core.splitter import list_pdfs
+
+    _make_pdf(tmp_path / "vero.pdf", 3)
+    (tmp_path / "._vero.pdf").write_bytes(b"AppleDouble junk")
+    (tmp_path / ".nascosto.pdf").write_bytes(b"hidden")
+
+    names = [p.name for p in list_pdfs(tmp_path)]
+    assert names == ["vero.pdf"]
+
+
+def test_analyze_folder_ignores_appledouble(tmp_path):
+    from pdf2md_pro.core.splitter import analyze_folder
+
+    src = tmp_path / "src"
+    src.mkdir()
+    _make_pdf(src / "manuale.pdf", 5)
+    (src / "._manuale.pdf").write_bytes(b"junk")
+
+    report = analyze_folder(src, max_pages=3, max_mb=None)
+    assert [e["file"] for e in report] == ["manuale.pdf"]
+    assert "error" not in report[0]

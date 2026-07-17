@@ -15,7 +15,7 @@ from typing import Callable
 
 from pdf2md_pro.core.naming import derive_topic, unique_path
 from pdf2md_pro.core.pipeline import ConversionError, convert
-from pdf2md_pro.core.splitter import needs_split, split_pdf
+from pdf2md_pro.core.splitter import list_pdfs, needs_split, split_pdf
 from pdf2md_pro.engines.openrouter import (
     DEFAULT_OLLAMA_URL,
     OpenRouterEngine,
@@ -131,7 +131,7 @@ def run_batch(config: BatchConfig, progress: ProgressFn = lambda e: None) -> dic
         except (ValueError, RuntimeError) as exc:
             raise ConversionError(str(exc)) from exc
 
-    pdfs = sorted(source.glob("*.pdf"))[: config.max_files]
+    pdfs = list_pdfs(source)[: config.max_files]
     job = _Job(config=config, progress=progress, llm_engine=llm_engine)
     _emit(job, status="batch_start", total=len(pdfs))
 
