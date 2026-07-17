@@ -19,6 +19,14 @@ document.querySelectorAll('input[name="mode"]').forEach((radio) =>
   })
 );
 
+document.querySelectorAll('input[name="provider"]').forEach((radio) =>
+  radio.addEventListener("change", () => {
+    const provider = document.querySelector('input[name="provider"]:checked').value;
+    $("glmocr-fields").hidden = provider !== "glmocr";
+    $("openrouter-fields").hidden = provider !== "openrouter";
+  })
+);
+
 function num(id) {
   const v = $(id).value.trim();
   return v === "" ? null : Number(v);
@@ -106,13 +114,16 @@ function post(url, payload) {
 
 startBtn.addEventListener("click", () => {
   const mode = document.querySelector('input[name="mode"]:checked').value;
+  const provider = document.querySelector('input[name="provider"]:checked').value;
   const payload = {
     source_dir: $("source-dir").value.trim(),
     dest_dir: $("dest-dir").value.trim(),
     max_files: num("max-files"),
     mode,
+    provider,
     api_key: $("api-key").value.trim(),
-    model: $("model").value.trim(),
+    model: provider === "glmocr" ? $("local-model").value.trim() : $("model").value.trim(),
+    ollama_url: $("ollama-url").value.trim(),
     auto_split: $("auto-split").checked,
     split_pages: num("split-pages"),
     split_mb: num("split-mb"),
@@ -122,8 +133,8 @@ startBtn.addEventListener("click", () => {
     addLog("Indicare cartella sorgente e destinazione.", "err");
     return;
   }
-  if (mode !== "native" && !payload.api_key) {
-    addLog("Modalità LLM: serve la chiave API OpenRouter.", "err");
+  if (mode !== "native" && provider === "openrouter" && !payload.api_key) {
+    addLog("Provider OpenRouter: serve la chiave API.", "err");
     return;
   }
   beginJob();

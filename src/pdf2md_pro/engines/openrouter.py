@@ -1,4 +1,8 @@
-"""Motore LLM via OpenRouter: trascrizione pagina come immagine → Markdown.
+"""Motore LLM su API chat OpenAI-compatibili: pagina come immagine → Markdown.
+
+Due provider:
+- ``glmocr``: GLM-OCR locale servito da Ollama (default, gratuito, offline)
+- ``openrouter``: modelli cloud via chiave API OpenRouter
 
 Pensato per contenuti tecnico-accademici: tabelle GFM, formule LaTeX,
 descrizioni delle figure. La chiave API resta in memoria, mai su disco.
@@ -18,6 +22,8 @@ from pdf2md_pro.engines.base import PageResult
 
 DEFAULT_MODEL = "z-ai/glm-4.5v"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
+OLLAMA_DEFAULT_MODEL = "glm-ocr:latest"
 RENDER_DPI = 150
 LLM_CONFIDENCE = 0.8  # trascrizione generativa: mai confidence piena
 
@@ -41,21 +47,27 @@ FAILED_PAGE_TEMPLATE = "> ⚠️ Pagina {page} non convertita (LLM): {error}\n"
 
 
 class OpenRouterEngine:
+    """Client chat-vision OpenAI-compatibile (OpenRouter, Ollama, ...)."""
+
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None,
         model: str = DEFAULT_MODEL,
-        timeout: float = 120.0,
+        timeout: float = 300.0,
+        api_url: str = API_URL,
+        provider: str = "openrouter",
     ) -> None:
-        if not api_key:
+        if provider == "openrouter" and not api_key:
             raise ValueError("chiave API OpenRouter mancante")
         self._api_key = api_key
         self.model = model
         self.timeout = timeout
+        self.api_url = api_url
+        self.provider = provider
 
     @property
     def name(self) -> str:
-        return f"openrouter:{self.model}"
+        return f"{self.provider}:{self.model}"
 
     @property
     def version(self) -> str:
@@ -115,15 +127,46 @@ class OpenRouterEngine:
             "messages": [{"role": "user", "content": content}],
             "max_tokens": max_tokens,
         }
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
         request = urllib.request.Request(
-            API_URL,
+            self.api_url,
             data=json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             data = json.loads(response.read().decode())
         return data["choices"][0]["message"]["content"]
+
+
+def ensure_ollama(url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> None:
+    """Verifica che il server Ollama risponda; errore chiaro se spento."""
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/api/tags", timeout=timeout):
+            pass
+    except Exception as exc:
+        raise RuntimeError(
+            f"Ollama non raggiungibile su {url}: avviare l'app Ollama "
+            f"o 'ollama serve' ({exc})"
+        ) from exc
+
+
+def make_llm_engine(
+    provider: str,
+    api_key: str | None = None,
+    model: str | None = None,
+    ollama_url: str = DEFAULT_OLLAMA_URL,
+) -> OpenRouterEngine:
+    """`glmocr` → GLM-OCR locale via Ollama; `openrouter` → cloud con chiave."""
+    if provider == "glmocr":
+        return OpenRouterEngine(
+            api_key=None,
+            model=model or OLLAMA_DEFAULT_MODEL,
+            api_url=ollama_url.rstrip("/") + "/v1/chat/completions",
+            provider="ollama",
+        )
+    if provider == "openrouter":
+        return OpenRouterEngine(api_key=api_key, model=model or DEFAULT_MODEL)
+    raise ValueError(f"provider LLM sconosciuto: {provider}")

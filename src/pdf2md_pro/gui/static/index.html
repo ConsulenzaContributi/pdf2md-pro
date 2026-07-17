@@ -36,19 +36,36 @@
             <span><strong>LLM totale</strong><small>ogni pagina via modello vision</small></span></label>
         </div>
         <div id="llm-fields" class="stack" hidden>
-          <label>Chiave API OpenRouter
-            <input type="password" id="api-key" autocomplete="off"
-                   placeholder="sk-or-…  (resta in memoria, mai salvata)">
-          </label>
-          <label>Modello
-            <input type="text" id="model" list="models" value="z-ai/glm-4.5v">
-            <datalist id="models">
-              <option value="z-ai/glm-4.5v"></option>
-              <option value="google/gemini-2.5-flash"></option>
-              <option value="anthropic/claude-sonnet-4.5"></option>
-              <option value="qwen/qwen2.5-vl-72b-instruct"></option>
-            </datalist>
-          </label>
+          <div class="radio-row" role="radiogroup" aria-label="Provider LLM">
+            <label class="radio"><input type="radio" name="provider" value="glmocr" checked>
+              <span><strong>GLM-OCR locale</strong><small>via Ollama — gratuito, tutto offline (default)</small></span></label>
+            <label class="radio"><input type="radio" name="provider" value="openrouter">
+              <span><strong>OpenRouter API</strong><small>modelli cloud tramite chiave API</small></span></label>
+          </div>
+          <div id="glmocr-fields">
+            <label>Modello locale (Ollama)
+              <input type="text" id="local-model" class="mono" value="glm-ocr:latest">
+            </label>
+            <label>URL server Ollama
+              <input type="text" id="ollama-url" class="mono" value="http://127.0.0.1:11434">
+            </label>
+          </div>
+          <div id="openrouter-fields" hidden>
+            <label>Chiave API OpenRouter
+              <input type="password" id="api-key" autocomplete="off"
+                     placeholder="sk-or-…  (resta in memoria, mai salvata)">
+            </label>
+            <label>Modello
+              <input type="text" id="model" list="models" value="z-ai/glm-4.5v">
+              <datalist id="models">
+                <option value="z-ai/glm-4.5v"></option>
+                <option value="nvidia/nemotron-3-ultra-550b-a55b:free"></option>
+                <option value="google/gemini-2.5-flash"></option>
+                <option value="anthropic/claude-sonnet-4.5"></option>
+                <option value="qwen/qwen2.5-vl-72b-instruct"></option>
+              </datalist>
+            </label>
+          </div>
         </div>
       </fieldset>
 
@@ -117,7 +134,7 @@
   </main>
 
   <footer class="foot">
-    <span>Locale al 100% — nessun dato lascia questa macchina salvo modalità LLM verso OpenRouter.</span>
+    <span>Locale al 100% — anche il motore LLM (GLM-OCR via Ollama). Nessun dato lascia questa macchina, salvo scelta esplicita del provider OpenRouter.</span>
   </footer>
 
   <script src="/app.js"></script>
