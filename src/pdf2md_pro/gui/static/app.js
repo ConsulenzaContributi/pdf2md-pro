@@ -63,7 +63,7 @@ document
 const CONFIG_KEY = "pdf2md-pro:config:v1";
 const TEXT_IDS = [
   "local-model", "ollama-url", "model", "source-dir", "dest-dir", "max-files",
-  "split-pages", "split-mb", "split-input",
+  "split-pages", "split-mb", "split-input", "split-interi",
   "tool-max-pages", "tool-max-mb",
 ];
 const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic"];
@@ -213,8 +213,9 @@ function describe(e) {
     case "split_done": {
       const extra = e.skipped != null ? `\n(${e.skipped} file già nei limiti)` : "";
       const errs = (e.errors || []).length ? `\nErrori: ${e.errors.join("; ")}` : "";
+      const dest = e.interi_dir ? ` (originali archiviati in ${e.interi_dir})` : "";
       const head = e.parts.length
-        ? `Parti create nella cartella (originali spostati in interi/):\n  ${e.parts.join("\n  ")}`
+        ? `Parti create nella cartella${dest}:\n  ${e.parts.join("\n  ")}`
         : "Nessun file da partizionare.";
       return [`${head}${extra}${errs}`, errs ? "err" : "ok"];
     }
@@ -397,6 +398,7 @@ splitBtn.addEventListener("click", () => {
   if (offlineBlocked()) return;
   const payload = {
     input: $("split-input").value.trim(),
+    interi_dir: $("split-interi").value.trim() || null,
     max_pages: num("tool-max-pages"),
     max_mb: num("tool-max-mb"),
   };

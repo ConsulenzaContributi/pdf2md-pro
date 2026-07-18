@@ -133,15 +133,21 @@ def analyze_folder(
 
 
 def partition_in_place(
-    pdf: Path, max_pages: int | None = None, max_mb: float | None = None
+    pdf: Path,
+    max_pages: int | None = None,
+    max_mb: float | None = None,
+    interi_dir: Path | None = None,
 ) -> list[str]:
-    """Crea le parti nella stessa cartella del PDF e sposta l'originale in
-    `interi/`. Ritorna i nomi delle parti. Presuppone che il file vada spezzato."""
+    """Crea le parti nella stessa cartella del PDF e archivia l'originale.
+
+    L'originale spezzato va in `interi_dir` se indicata, altrimenti nella
+    sottocartella `interi/` accanto al file. Ritorna i nomi delle parti;
+    presuppone che il file vada spezzato."""
     pdf = Path(pdf)
     folder = pdf.parent
     parts = split_pdf(pdf, folder, max_pages, max_mb)
-    interi = folder / INTERI_DIR
-    interi.mkdir(exist_ok=True)
+    interi = Path(interi_dir) if interi_dir else folder / INTERI_DIR
+    interi.mkdir(parents=True, exist_ok=True)
     shutil.move(str(pdf), str(unique_path(interi, pdf.stem, pdf.suffix)))
     return [p.name for p in parts]
 
@@ -151,21 +157,22 @@ def split_folder(
     max_pages: int | None = None,
     max_mb: float | None = None,
     progress: Callable[[dict], None] = lambda e: None,
+    interi_dir: Path | None = None,
 ) -> dict:
     """Partiziona i PDF della cartella oltre i limiti, in loco.
 
     Le parti restano nella cartella elaborata; ogni originale spezzato viene
-    spostato nella sottocartella `interi/`. I file già nei limiti non si toccano.
-    Ritorna `{"split": {nome: [parti]}, "skipped": [nomi], "errors": [msg],
-    "interi_dir": percorso}`. Un file rotto non ferma gli altri.
-    """
+    archiviato in `interi_dir` (default: sottocartella `interi/`). I file già
+    nei limiti non si toccano. Ritorna `{"split": {nome: [parti]}, "skipped":
+    [nomi], "errors": [msg], "interi_dir": percorso}`. Un file rotto non ferma
+    gli altri."""
     source = Path(source_dir)
     if not source.is_dir():
         raise ValueError(f"cartella non trovata: {source}")
+    interi = Path(interi_dir) if interi_dir else source / INTERI_DIR
 
     summary: dict = {
-        "split": {}, "skipped": [], "errors": [],
-        "interi_dir": str(source / INTERI_DIR),
+        "split": {}, "skipped": [], "errors": [], "interi_dir": str(interi),
     }
     for pdf in list_pdfs(source):  # materializzato: le parti create non rientrano
         try:
@@ -173,7 +180,7 @@ def split_folder(
                 summary["skipped"].append(pdf.name)
                 progress({"status": "skip", "file": pdf.name})
                 continue
-            names = partition_in_place(pdf, max_pages, max_mb)
+            names = partition_in_place(pdf, max_pages, max_mb, interi)
             summary["split"][pdf.name] = names
             progress({"status": "split", "file": pdf.name, "parts": len(names)})
         except Exception as exc:

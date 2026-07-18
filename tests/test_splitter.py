@@ -151,3 +151,17 @@ def test_analyze_folder_ignores_appledouble(tmp_path):
     report = analyze_folder(src, max_pages=3, max_mb=None)
     assert [e["file"] for e in report] == ["manuale.pdf"]
     assert "error" not in report[0]
+
+
+def test_split_folder_custom_interi_dir(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    _make_pdf(src / "grande.pdf", 5)
+    archivio = tmp_path / "archivio_interi"
+
+    summary = split_folder(src, max_pages=2, max_mb=None, interi_dir=archivio)
+
+    assert summary["interi_dir"] == str(archivio)
+    assert (archivio / "grande.pdf").is_file()          # originale archiviato altrove
+    assert not (src / "interi").exists()                # niente interi/ di default
+    assert (src / "grande 03 01.pdf").is_file()         # parti restano nella cartella

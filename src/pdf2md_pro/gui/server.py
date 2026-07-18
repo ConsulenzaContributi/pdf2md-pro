@@ -99,18 +99,23 @@ def _run_split(payload: dict) -> None:
         target = _clean_path(payload["input"])
         max_pages = payload.get("max_pages") or None
         max_mb = payload.get("max_mb") or None
+        interi = _clean_path(payload["interi_dir"]) if payload.get("interi_dir") else None
         if target.is_dir():
-            summary = split_folder(target, max_pages, max_mb, progress=_progress)
+            summary = split_folder(
+                target, max_pages, max_mb, progress=_progress, interi_dir=interi
+            )
             names = [p for parts in summary["split"].values() for p in parts]
-            done = {"status": "split_done", "parts": names,
+            done = {"status": "split_done", "parts": names, "interi_dir": summary["interi_dir"],
                     "skipped": len(summary["skipped"]), "errors": summary["errors"]}
         elif not needs_split(target, max_pages, max_mb):
             summary = {"parts": [], "interi_dir": None}
             done = {"status": "split_done", "parts": [], "skipped": 1, "errors": []}
         else:
-            names = partition_in_place(target, max_pages, max_mb)
-            summary = {"parts": names, "interi_dir": str(target.parent / "interi")}
-            done = {"status": "split_done", "parts": names, "skipped": 0, "errors": []}
+            names = partition_in_place(target, max_pages, max_mb, interi)
+            interi_used = str(interi) if interi else str(target.parent / "interi")
+            summary = {"parts": names, "interi_dir": interi_used}
+            done = {"status": "split_done", "parts": names, "interi_dir": interi_used,
+                    "skipped": 0, "errors": []}
         with _LOCK:
             _JOB["summary"] = summary
             _JOB["events"].append(done)

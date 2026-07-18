@@ -157,6 +157,13 @@
             <input type="number" id="tool-max-mb" min="0.1" step="0.1" placeholder="es. 10">
           </label>
         </div>
+        <label>Cartella archivio degli originali (facoltativa)
+          <span class="browse-row">
+            <input type="text" id="split-interi" class="mono"
+                   placeholder="vuoto = sottocartella  interi/  nella cartella elaborata">
+            <button type="button" class="browse" data-pick="folder" data-target="split-interi">Sfoglia…</button>
+          </span>
+        </label>
         <button id="analyze-start" class="secondary">1 · Analizza i file oltre i limiti</button>
         <button id="split-start" class="secondary">2 · Partiziona (in loco)</button>
         <button id="convert-parts" class="secondary">3 · Elabora gli MD dalla cartella</button>

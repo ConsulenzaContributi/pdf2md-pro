@@ -103,9 +103,12 @@ def _cmd_split(args) -> int:
         print("errore: indicare --max-pages e/o --max-mb", file=sys.stderr)
         return 2
     target = Path(args.input)
+    interi = Path(args.interi_dir) if args.interi_dir else None
     try:
         if target.is_dir():
-            summary = split_folder(target, args.max_pages, args.max_mb)
+            summary = split_folder(
+                target, args.max_pages, args.max_mb, interi_dir=interi
+            )
             for name, parts in summary["split"].items():
                 print(f"{name} → {len(parts)} parti: {', '.join(parts)}")
             for name in summary["skipped"]:
@@ -118,12 +121,12 @@ def _cmd_split(args) -> int:
         if not needs_split(target, args.max_pages, args.max_mb):
             print("già nei limiti: nessuna partizione necessaria")
             return 0
-        names = partition_in_place(target, args.max_pages, args.max_mb)
+        names = partition_in_place(target, args.max_pages, args.max_mb, interi)
     except Exception as exc:
         print(f"errore: {exc}", file=sys.stderr)
         return 2
     print(f"{len(names)} parti create in {target.parent}: {', '.join(names)}")
-    print(f"originale spostato in {target.parent / 'interi'}")
+    print(f"originale archiviato in {interi or target.parent / 'interi'}")
     return 0
 
 
@@ -173,6 +176,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_split.add_argument("input", help="file PDF o cartella da analizzare")
     p_split.add_argument("--max-pages", type=int)
     p_split.add_argument("--max-mb", type=float)
+    p_split.add_argument("--interi-dir", default=None,
+                         help="cartella dove archiviare gli originali (default: <cartella>/interi)")
     p_split.set_defaults(fn=_cmd_split)
 
     p_gui = sub.add_parser("gui", help="avvia l'interfaccia web locale")
