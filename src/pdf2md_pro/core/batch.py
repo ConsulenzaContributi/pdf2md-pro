@@ -75,7 +75,8 @@ class BatchConfig:
     split_pages: int | None = 100
     split_mb: float | None = 10.0
     extract_images: bool = True
-    llm_topic: bool = True  # con LLM attivo, argomento suggerito dal modello
+    rename_by_topic: bool = False  # default: il md tiene il nome del PDF originale
+    llm_topic: bool = True  # con LLM attivo e rinomina per argomento, argomento dal modello
 
 
 @dataclass
@@ -100,15 +101,16 @@ def _topic_for(job: _Job, markdown: str) -> str:
 
 
 def _deliver(job: _Job, tmp_out: Path, source_stem: str) -> str:
-    """Sposta md/sidecar/assets dalla cartella temporanea alla destinazione,
-    rinominando per argomento. Ritorna il nome del md finale."""
+    """Sposta md/sidecar/assets dalla cartella temporanea alla destinazione.
+    Il md tiene il nome del PDF originale, salvo rinomina per argomento
+    esplicita. Ritorna il nome del md finale."""
     dest = job.config.dest_dir
     dest.mkdir(parents=True, exist_ok=True)
     md_src = tmp_out / f"{source_stem}.md"
     markdown = md_src.read_text(encoding="utf-8")
 
-    topic = _topic_for(job, markdown)
-    md_dest = unique_path(dest, topic, ".md")
+    stem = _topic_for(job, markdown) if job.config.rename_by_topic else source_stem
+    md_dest = unique_path(dest, stem, ".md")
     final_stem = md_dest.stem
     shutil.move(md_src, md_dest)
     sidecar = tmp_out / f"{source_stem}.provenance.json"

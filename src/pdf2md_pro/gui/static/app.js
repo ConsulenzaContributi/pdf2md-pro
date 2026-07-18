@@ -66,7 +66,7 @@ const TEXT_IDS = [
   "split-pages", "split-mb", "split-input", "split-out",
   "tool-max-pages", "tool-max-mb",
 ];
-const CHECK_IDS = ["extract-images", "auto-split", "remember-key"];
+const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic"];
 const RADIO_NAMES = ["mode", "provider"];
 
 function saveConfig() {
@@ -246,6 +246,7 @@ function buildConvertPayload(sourceDir) {
     split_pages: num("split-pages"),
     split_mb: num("split-mb"),
     extract_images: $("extract-images").checked,
+    rename_by_topic: $("rename-topic").checked,
   };
 }
 

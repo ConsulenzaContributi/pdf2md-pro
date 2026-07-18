@@ -72,6 +72,7 @@ def _run_convert(payload: dict) -> None:
             split_pages=payload.get("split_pages") or None,
             split_mb=payload.get("split_mb") or None,
             extract_images=bool(payload.get("extract_images", True)),
+            rename_by_topic=bool(payload.get("rename_by_topic")),
         )
         global _CONTROL
         _CONTROL = JobControl()
