@@ -11,7 +11,14 @@
     <div class="banner-track"><div id="banner-fill" class="banner-fill"></div></div>
     <div class="banner-meta">
       <span id="banner-label">In lavorazione…</span>
-      <span id="banner-count" class="mono"></span>
+      <span class="banner-right">
+        <span id="banner-count" class="mono"></span>
+        <span id="banner-controls" hidden>
+          <button type="button" id="pause-btn" class="ctrl">Pausa</button>
+          <button type="button" id="resume-btn" class="ctrl" hidden>Riprendi</button>
+          <button type="button" id="stop-btn" class="ctrl ctrl-stop">Interrompi</button>
+        </span>
+      </span>
     </div>
   </div>
 
@@ -29,12 +36,14 @@
         <legend>Motore</legend>
         <div class="radio-row" role="radiogroup" aria-label="Modalità motore">
           <label class="radio"><input type="radio" name="mode" value="native" checked>
-            <span><strong>Nativo</strong><small>motore locale PyMuPDF4LLM + OCR Tesseract — tutto offline</small></span></label>
+            <span><strong>Nativo</strong><small>solo motore locale PyMuPDF4LLM + OCR Tesseract. Nessun LLM, nessun GLM-OCR. Tutto offline.</small></span></label>
           <label class="radio"><input type="radio" name="mode" value="hybrid">
-            <span><strong>Ibrido</strong><small>LLM solo su scansioni e pagine complesse</small></span></label>
+            <span><strong>Ibrido</strong><small>Nativo sul testo + <b>GLM-OCR</b> (o OpenRouter) solo su scansioni e pagine complesse.</small></span></label>
           <label class="radio"><input type="radio" name="mode" value="llm">
-            <span><strong>LLM totale</strong><small>ogni pagina via modello vision</small></span></label>
+            <span><strong>LLM totale</strong><small>Ogni pagina trascritta da <b>GLM-OCR</b> (o OpenRouter). Massima qualità, più lento.</small></span></label>
         </div>
+        <p class="note" id="engine-hint">Il modello <b>GLM-OCR</b> si usa in <b>Ibrido</b> e <b>LLM totale</b>.
+          Scegli sotto quale motore LLM: GLM-OCR locale (default) o OpenRouter.</p>
         <div id="llm-fields" class="stack" hidden>
           <div class="radio-row" role="radiogroup" aria-label="Provider LLM">
             <label class="radio"><input type="radio" name="provider" value="glmocr" checked>

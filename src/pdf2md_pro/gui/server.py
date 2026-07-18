@@ -15,7 +15,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from pdf2md_pro.core.batch import BatchConfig, run_batch
+from pdf2md_pro.core.batch import BatchConfig, JobControl, run_batch
 from pdf2md_pro.core.splitter import analyze_folder, split_folder, split_pdf
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -23,12 +23,13 @@ MAX_EVENTS = 500
 
 _LOCK = threading.Lock()
 _JOB: dict = {"running": False, "kind": None, "events": [], "summary": None, "error": None}
+_CONTROL: JobControl | None = None
 
 
 def _reset_job(kind: str) -> None:
     _JOB.update(
         running=True, kind=kind, events=[], summary=None, error=None,
-        done=0, total=0, current="",
+        done=0, total=0, current="", paused=False,
     )
 
 
@@ -42,6 +43,10 @@ def _progress(event: dict) -> None:
             _JOB["current"] = event.get("file", "")
         elif status in ("done", "error"):
             _JOB["done"] = event.get("index", _JOB["done"])
+        elif status == "paused":
+            _JOB["paused"] = True
+        elif status == "resumed":
+            _JOB["paused"] = False
 
 
 def _clean_path(raw: str) -> Path:
@@ -68,7 +73,9 @@ def _run_convert(payload: dict) -> None:
             split_mb=payload.get("split_mb") or None,
             extract_images=bool(payload.get("extract_images", True)),
         )
-        summary = run_batch(config, progress=_progress)
+        global _CONTROL
+        _CONTROL = JobControl()
+        summary = run_batch(config, progress=_progress, control=_CONTROL)
         with _LOCK:
             _JOB["summary"] = summary
     except Exception as exc:
@@ -182,6 +189,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(200, {"files": report})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path in ("/api/pause", "/api/resume", "/api/stop"):
+            if _CONTROL is None or not _JOB["running"]:
+                self._send_json(409, {"error": "nessuna conversione in corso"})
+                return
+            if self.path == "/api/pause":
+                _CONTROL.pause()
+            elif self.path == "/api/resume":
+                _CONTROL.resume()
+            else:
+                _CONTROL.stop()
+            self._send_json(200, {"ok": True})
             return
 
         targets = {"/api/convert": ("convert", _run_convert), "/api/split": ("split", _run_split)}

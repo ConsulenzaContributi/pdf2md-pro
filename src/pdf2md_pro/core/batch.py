@@ -9,9 +9,44 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+
+
+class JobControl:
+    """Controllo pausa/ripresa/stop di una conversione batch.
+
+    La pausa agisce tra un file e il successivo (il file in corso viene
+    completato); lo stop interrompe il lotto dopo il file corrente."""
+
+    def __init__(self) -> None:
+        self._running = threading.Event()
+        self._running.set()  # set = in esecuzione, clear = in pausa
+        self._stop = threading.Event()
+
+    def pause(self) -> None:
+        self._running.clear()
+
+    def resume(self) -> None:
+        self._running.set()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._running.set()  # sblocca l'eventuale attesa in pausa
+
+    @property
+    def paused(self) -> bool:
+        return not self._running.is_set()
+
+    @property
+    def stopped(self) -> bool:
+        return self._stop.is_set()
+
+    def wait_if_paused(self) -> None:
+        """Blocca finché in pausa; ritorna subito se in esecuzione o fermato."""
+        self._running.wait()
 
 from pdf2md_pro.core.naming import derive_topic, unique_path
 from pdf2md_pro.core.pipeline import ConversionError, convert
@@ -115,7 +150,11 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
     return produced
 
 
-def run_batch(config: BatchConfig, progress: ProgressFn = lambda e: None) -> dict:
+def run_batch(
+    config: BatchConfig,
+    progress: ProgressFn = lambda e: None,
+    control: JobControl | None = None,
+) -> dict:
     source = Path(config.source_dir)
     if not source.is_dir():
         raise ConversionError(f"cartella sorgente non trovata: {source}")
@@ -135,7 +174,18 @@ def run_batch(config: BatchConfig, progress: ProgressFn = lambda e: None) -> dic
     job = _Job(config=config, progress=progress, llm_engine=llm_engine)
     _emit(job, status="batch_start", total=len(pdfs))
 
+    stopped = False
     for index, pdf in enumerate(pdfs, start=1):
+        if control is not None:
+            if control.paused:
+                _emit(job, status="paused", index=index, total=len(pdfs))
+                control.wait_if_paused()
+                if not control.stopped:
+                    _emit(job, status="resumed", index=index, total=len(pdfs))
+            if control.stopped:
+                stopped = True
+                _emit(job, status="stopped", index=index, total=len(pdfs))
+                break
         _emit(job, status="start", file=pdf.name, index=index, total=len(pdfs))
         try:
             produced = _convert_one(job, pdf)
@@ -157,6 +207,7 @@ def run_batch(config: BatchConfig, progress: ProgressFn = lambda e: None) -> dic
         "outputs": job.outputs,
         "errors": job.errors,
         "total_files": len(pdfs),
+        "stopped": stopped,
     }
     _emit(job, status="batch_done", **summary)
     return summary
