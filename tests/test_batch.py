@@ -93,3 +93,40 @@ def test_batch_continues_after_broken_file(folders):
     assert summary["converted"] == 2
     assert len(summary["errors"]) == 1
     assert "rotto.pdf" in summary["errors"][0]
+
+
+def test_batch_stop_aborts_remaining_files(tmp_path):
+    from pdf2md_pro.core.batch import JobControl
+
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    src.mkdir()
+    for i in range(4):
+        _make_pdf(src / f"doc{i}.pdf", f"Documento {i}")
+
+    control = JobControl()
+    # ferma dopo il primo file convertito
+    def on_progress(event):
+        if event.get("status") == "done":
+            control.stop()
+
+    summary = run_batch(
+        BatchConfig(source_dir=src, dest_dir=dest, extract_images=False),
+        progress=on_progress,
+        control=control,
+    )
+    assert summary["stopped"] is True
+    assert summary["converted"] == 1  # solo il primo, poi stop
+
+
+def test_jobcontrol_pause_resume():
+    from pdf2md_pro.core.batch import JobControl
+
+    control = JobControl()
+    assert not control.stopped
+    control.pause()
+    assert control.paused
+    control.resume()
+    assert not control.paused
+    control.stop()
+    assert control.stopped

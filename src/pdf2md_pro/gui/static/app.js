@@ -10,6 +10,10 @@ const startBtn = $("start");
 const splitBtn = $("split-start");
 const analyzeBtn = $("analyze-start");
 const convertPartsBtn = $("convert-parts");
+const bannerControls = $("banner-controls");
+const pauseBtn = $("pause-btn");
+const resumeBtn = $("resume-btn");
+const stopBtn = $("stop-btn");
 
 let pollTimer = null;
 let renderedEvents = 0;
@@ -139,8 +143,13 @@ function describe(e) {
     case "skip": return [`  — ${e.file}: già nei limiti`, "dim"];
     case "done": return [`  ✔ ${e.file} → ${(e.outputs || []).join(", ")}`, "ok"];
     case "error": return [`  ✘ ${e.file}: ${e.error}`, "err"];
-    case "batch_done":
-      return [`Completato: ${e.converted} md prodotti, ${e.errors.length} errori`, e.errors.length ? "err" : "ok"];
+    case "paused": return [`⏸ In pausa dopo ${e.index - 1}/${e.total} file.`, "dim"];
+    case "resumed": return [`▶ Ripresa.`, "dim"];
+    case "stopped": return [`⏹ Interrotto dopo ${e.index - 1}/${e.total} file.`, "err"];
+    case "batch_done": {
+      const base = `Completato: ${e.converted} md prodotti, ${e.errors.length} errori`;
+      return [e.stopped ? base + " (interrotto)" : base, e.errors.length ? "err" : "ok"];
+    }
     case "split_done": {
       const extra = e.skipped != null ? `\n(${e.skipped} file già nei limiti)` : "";
       const errs = (e.errors || []).length ? `\nErrori: ${e.errors.join("; ")}` : "";
@@ -158,13 +167,18 @@ function applyState(state) {
     const pct = Math.round((state.done / state.total) * 100);
     bannerFill.style.width = pct + "%";
     bannerCount.textContent = `${state.done}/${state.total} · ${pct}%`;
-    bannerLabel.textContent = state.running
-      ? `Conversione: ${state.current || "…"}`
-      : "Conversione completata";
+    if (!state.running) bannerLabel.textContent = "Conversione completata";
+    else if (state.paused) bannerLabel.textContent = "In pausa — file in corso completato";
+    else bannerLabel.textContent = `Conversione: ${state.current || "…"}`;
+    // controlli pausa/stop solo durante una conversione attiva
+    bannerControls.hidden = !state.running;
+    pauseBtn.hidden = !!state.paused;
+    resumeBtn.hidden = !state.paused;
   } else {
     bannerFill.style.width = state.running ? "35%" : "100%";
     bannerLabel.textContent = state.running ? "Partizionamento…" : "Job completato";
     bannerCount.textContent = "";
+    bannerControls.hidden = true;
   }
 
   if (!state.running) {
@@ -177,8 +191,18 @@ function stopPolling() {
   clearInterval(pollTimer);
   pollTimer = null;
   [startBtn, splitBtn, analyzeBtn, convertPartsBtn].forEach((b) => { b.disabled = false; });
+  bannerControls.hidden = true;
   setTimeout(() => { banner.hidden = true; }, 2500);
 }
+
+function sendControl(path) {
+  fetch(path, { method: "POST" }).catch(() => {});
+}
+pauseBtn.addEventListener("click", () => { sendControl("/api/pause"); pauseBtn.hidden = true; resumeBtn.hidden = false; });
+resumeBtn.addEventListener("click", () => { sendControl("/api/resume"); resumeBtn.hidden = true; pauseBtn.hidden = false; });
+stopBtn.addEventListener("click", () => {
+  if (confirm("Interrompere la conversione dopo il file in corso?")) sendControl("/api/stop");
+});
 
 function poll() {
   fetch("/api/state")
