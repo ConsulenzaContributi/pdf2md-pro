@@ -65,6 +65,7 @@ ProgressFn = Callable[[dict], None]
 class BatchConfig:
     source_dir: Path
     dest_dir: Path
+    only_files: list[str] | None = None  # None = tutti; altrimenti solo questi nomi
     max_files: int | None = None
     mode: str = "native"  # native | hybrid | llm
     provider: str = "glmocr"  # glmocr (locale via Ollama) | openrouter
@@ -172,7 +173,11 @@ def run_batch(
         except (ValueError, RuntimeError) as exc:
             raise ConversionError(str(exc)) from exc
 
-    pdfs = list_pdfs(source)[: config.max_files]
+    pdfs = list_pdfs(source)
+    if config.only_files is not None:
+        wanted = set(config.only_files)
+        pdfs = [p for p in pdfs if p.name in wanted]
+    pdfs = pdfs[: config.max_files]
     job = _Job(config=config, progress=progress, llm_engine=llm_engine)
     _emit(job, status="batch_start", total=len(pdfs))
 

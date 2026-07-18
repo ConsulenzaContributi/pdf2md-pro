@@ -144,3 +144,14 @@ def test_jobcontrol_pause_resume():
     assert not control.paused
     control.stop()
     assert control.stopped
+
+
+def test_batch_only_selected_files(folders):
+    src, dest = folders  # contiene a.pdf e b.pdf
+    summary = run_batch(
+        BatchConfig(
+            source_dir=src, dest_dir=dest, only_files=["a.pdf"], extract_images=False
+        )
+    )
+    assert summary["converted"] == 1
+    assert sorted(p.name for p in dest.glob("*.md")) == ["a.md"]

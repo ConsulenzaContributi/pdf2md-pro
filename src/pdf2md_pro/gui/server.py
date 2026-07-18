@@ -16,7 +16,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from pdf2md_pro.core.batch import BatchConfig, JobControl, run_batch
-from pdf2md_pro.core.splitter import analyze_folder, split_folder, split_pdf
+from pdf2md_pro.core.splitter import (
+    analyze_folder,
+    list_pdfs,
+    split_folder,
+    split_pdf,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_EVENTS = 500
@@ -62,6 +67,7 @@ def _run_convert(payload: dict) -> None:
         config = BatchConfig(
             source_dir=_clean_path(payload["source_dir"]),
             dest_dir=_clean_path(payload["dest_dir"]),
+            only_files=payload.get("only_files") or None,
             max_files=payload.get("max_files") or None,
             mode=payload.get("mode", "native"),
             provider=payload.get("provider", "glmocr"),
@@ -169,6 +175,16 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/pick":
             kind = urllib.parse.parse_qs(parsed.query).get("kind", ["folder"])[0]
             self._send_json(200, _pick_path(kind))
+        elif parsed.path == "/api/version":
+            from pdf2md_pro import __version__
+            self._send_json(200, {"version": __version__})
+        elif parsed.path == "/api/list-pdfs":
+            raw = urllib.parse.parse_qs(parsed.query).get("source_dir", [""])[0]
+            folder = _clean_path(raw)
+            if not folder.is_dir():
+                self._send_json(400, {"error": f"cartella non trovata: {folder}"})
+            else:
+                self._send_json(200, {"files": [p.name for p in list_pdfs(folder)]})
         else:
             self._send_json(404, {"error": "non trovato"})
 

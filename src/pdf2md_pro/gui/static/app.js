@@ -104,6 +104,66 @@ document.querySelectorAll("input, select").forEach((el) => {
   el.addEventListener("input", saveConfig);
 });
 
+// versione (log SemVer) accanto al titolo
+fetch("/api/version")
+  .then((r) => r.json())
+  .then((d) => { if (d.version) $("app-version").textContent = "v" + d.version; })
+  .catch(() => {});
+
+// --- Selezione dei file da convertire ---
+const fileList = $("file-list");
+const fileSummary = $("file-select-summary");
+const fileActions = $("file-select-actions");
+
+function selectedFiles() {
+  // null = nessuna selezione esplicita → tutti i PDF della cartella
+  const boxes = fileList.querySelectorAll('input[type="checkbox"]');
+  if (boxes.length === 0) return null;
+  return [...boxes].filter((b) => b.checked).map((b) => b.value);
+}
+
+function updateFileSummary() {
+  const sel = selectedFiles();
+  if (sel === null) { fileSummary.textContent = "tutti i PDF della cartella"; return; }
+  const total = fileList.querySelectorAll('input[type="checkbox"]').length;
+  fileSummary.textContent = `${sel.length} di ${total} file selezionati`;
+}
+
+$("list-files-btn").addEventListener("click", async () => {
+  if (offlineBlocked()) return;
+  const source = $("source-dir").value.trim();
+  if (!source) { addLog("Indicare prima la cartella sorgente.", "err"); return; }
+  try {
+    const r = await fetch("/api/list-pdfs?source_dir=" + encodeURIComponent(source));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    if (!d.files.length) { fileSummary.textContent = "nessun PDF nella cartella"; return; }
+    fileList.replaceChildren();
+    d.files.forEach((name) => {
+      const label = document.createElement("label");
+      const box = document.createElement("input");
+      box.type = "checkbox"; box.value = name; box.checked = true;
+      box.addEventListener("change", updateFileSummary);
+      const span = document.createElement("span");
+      span.className = "file-name"; span.textContent = name;
+      label.append(box, span);
+      fileList.appendChild(label);
+    });
+    fileList.hidden = false;
+    fileActions.hidden = false;
+    updateFileSummary();
+  } catch (e) {
+    addLog("Elenco file: " + fetchErrorText(e), "err");
+  }
+});
+
+function setAllFiles(checked) {
+  fileList.querySelectorAll('input[type="checkbox"]').forEach((b) => { b.checked = checked; });
+  updateFileSummary();
+}
+$("sel-all").addEventListener("click", () => setAllFiles(true));
+$("sel-none").addEventListener("click", () => setAllFiles(false));
+
 // pulsanti "Sfoglia…": aprono il Finder lato server (osascript)
 document.querySelectorAll("button.browse").forEach((btn) =>
   btn.addEventListener("click", async () => {
@@ -230,12 +290,13 @@ function post(url, payload) {
   });
 }
 
-function buildConvertPayload(sourceDir) {
+function buildConvertPayload(sourceDir, onlyFiles = null) {
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const provider = document.querySelector('input[name="provider"]:checked').value;
   return {
     source_dir: sourceDir,
     dest_dir: $("dest-dir").value.trim(),
+    only_files: onlyFiles,
     max_files: num("max-files"),
     mode,
     provider,
@@ -264,9 +325,14 @@ function submitConvert(payload) {
   post("/api/convert", payload).catch((e) => { addLog("ERRORE: " + fetchErrorText(e), "err"); stopPolling(); });
 }
 
-startBtn.addEventListener("click", () =>
-  submitConvert(buildConvertPayload($("source-dir").value.trim()))
-);
+startBtn.addEventListener("click", () => {
+  const onlyFiles = selectedFiles();
+  if (onlyFiles !== null && onlyFiles.length === 0) {
+    addLog("Nessun file selezionato: spunta almeno un PDF o usa 'tutti'.", "err");
+    return;
+  }
+  submitConvert(buildConvertPayload($("source-dir").value.trim(), onlyFiles));
+});
 
 // passo 3 del partizionatore: converte la cartella delle parti in Markdown
 convertPartsBtn.addEventListener("click", () => {

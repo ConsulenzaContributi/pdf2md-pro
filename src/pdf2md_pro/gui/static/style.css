@@ -81,6 +81,32 @@ body {
 }
 .accent { color: var(--accent); }
 .tagline { color: var(--text-dim); max-width: 52ch; margin-top: 0.3rem; }
+.version-badge {
+  font-size: 0.9rem; font-weight: 600; letter-spacing: 0.02em;
+  color: oklch(18% 0.02 75); background: var(--accent);
+  padding: 0.1rem 0.5rem; border-radius: 999px; vertical-align: middle;
+  font-family: var(--font-mono);
+}
+
+/* selezione file da convertire */
+.file-select { margin-top: 0.75rem; }
+.file-select-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.file-summary { font-size: 0.82rem; color: var(--text-dim); }
+.linklike {
+  background: none; border: none; color: var(--accent); padding: 0 0.2rem;
+  font-size: 0.8rem; text-decoration: underline; cursor: pointer;
+}
+.file-list {
+  margin-top: 0.5rem; max-height: 12rem; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--bg-inset);
+  padding: 0.4rem 0.6rem;
+}
+.file-list label {
+  display: flex; gap: 0.5rem; align-items: center; margin: 0.15rem 0;
+  font-size: 0.82rem; color: var(--text); cursor: pointer;
+}
+.file-list input { accent-color: var(--accent); width: auto; margin: 0; }
+.file-list .file-name { font-family: var(--font-mono); word-break: break-all; }
 
 /* ---- layout ---- */
 .layout {

@@ -23,7 +23,7 @@
   </div>
 
   <header class="masthead">
-    <h1>pdf2md<span class="accent">·</span>pro</h1>
+    <h1>pdf2md<span class="accent">·</span>pro <span id="app-version" class="version-badge"></span></h1>
     <p class="tagline">Trascrizione PDF → Markdown per contenuti tecnico-accademici.
       Tabelle, formule, figure descritte, provenienza per pagina.</p>
   </header>
@@ -88,6 +88,17 @@
             <button type="button" class="browse" data-pick="folder" data-target="source-dir">Sfoglia…</button>
           </span>
         </label>
+        <div class="file-select">
+          <div class="file-select-head">
+            <button type="button" id="list-files-btn" class="browse">Scegli file…</button>
+            <span id="file-select-summary" class="file-summary">tutti i PDF della cartella</span>
+            <span id="file-select-actions" hidden>
+              <button type="button" id="sel-all" class="linklike">tutti</button>
+              <button type="button" id="sel-none" class="linklike">nessuno</button>
+            </span>
+          </div>
+          <div id="file-list" class="file-list" hidden></div>
+        </div>
         <label>Cartella destinazione (MD)
           <span class="browse-row">
             <input type="text" id="dest-dir" class="mono" placeholder="/percorso/cartella/markdown">
