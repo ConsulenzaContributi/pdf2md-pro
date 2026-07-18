@@ -64,16 +64,15 @@ def test_no_split_needed_returns_original(six_pages, tmp_path):
     assert parts == [six_pages]
 
 
-def test_split_folder_selects_only_oversized(tmp_path):
+def test_split_folder_in_place_moves_originals_to_interi(tmp_path):
     src = tmp_path / "src"
-    out = tmp_path / "out"
     src.mkdir()
     _make_pdf(src / "grande.pdf", 5)
     _make_pdf(src / "piccolo.pdf", 2)
     (src / "rotto.pdf").write_bytes(b"non-pdf")
 
     events = []
-    summary = split_folder(src, out, max_pages=2, max_mb=None, progress=events.append)
+    summary = split_folder(src, max_pages=2, max_mb=None, progress=events.append)
 
     assert summary["split"]["grande.pdf"] == [
         "grande 03 01.pdf",
@@ -82,8 +81,15 @@ def test_split_folder_selects_only_oversized(tmp_path):
     ]
     assert summary["skipped"] == ["piccolo.pdf"]
     assert len(summary["errors"]) == 1 and "rotto.pdf" in summary["errors"][0]
-    assert (out / "grande 03 01.pdf").is_file()
-    assert not (out / "piccolo 01 01.pdf").exists()
+
+    # le parti restano nella cartella elaborata
+    assert (src / "grande 03 01.pdf").is_file()
+    # l'originale spezzato è spostato in interi/
+    assert not (src / "grande.pdf").exists()
+    assert (src / "interi" / "grande.pdf").is_file()
+    # il file già nei limiti resta dov'è, non finisce in interi/
+    assert (src / "piccolo.pdf").is_file()
+    assert not (src / "interi" / "piccolo.pdf").exists()
 
     statuses = [e["status"] for e in events]
     assert "split" in statuses and "skip" in statuses and "error" in statuses
@@ -97,10 +103,10 @@ def test_split_folder_joint_limits(tmp_path):
     big = _make_pdf(src / "pesante.pdf", 2)
     size_mb = big.stat().st_size / (1024 * 1024)
 
-    summary = split_folder(
-        src, tmp_path / "out", max_pages=3, max_mb=size_mb * 0.9
-    )
+    summary = split_folder(src, max_pages=3, max_mb=size_mb * 0.9)
     assert set(summary["split"]) == {"tante_pagine.pdf", "pesante.pdf"}
+    assert (src / "interi" / "tante_pagine.pdf").is_file()
+    assert (src / "interi" / "pesante.pdf").is_file()
 
 
 def test_analyze_folder_reports_limits(tmp_path):

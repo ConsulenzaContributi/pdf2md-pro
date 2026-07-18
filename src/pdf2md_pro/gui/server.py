@@ -19,8 +19,9 @@ from pdf2md_pro.core.batch import BatchConfig, JobControl, run_batch
 from pdf2md_pro.core.splitter import (
     analyze_folder,
     list_pdfs,
+    needs_split,
+    partition_in_place,
     split_folder,
-    split_pdf,
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -96,21 +97,20 @@ def _run_convert(payload: dict) -> None:
 def _run_split(payload: dict) -> None:
     try:
         target = _clean_path(payload["input"])
-        out_dir = _clean_path(payload["out_dir"])
         max_pages = payload.get("max_pages") or None
         max_mb = payload.get("max_mb") or None
         if target.is_dir():
-            summary = split_folder(
-                target, out_dir, max_pages, max_mb, progress=_progress
-            )
+            summary = split_folder(target, max_pages, max_mb, progress=_progress)
             names = [p for parts in summary["split"].values() for p in parts]
             done = {"status": "split_done", "parts": names,
                     "skipped": len(summary["skipped"]), "errors": summary["errors"]}
+        elif not needs_split(target, max_pages, max_mb):
+            summary = {"parts": [], "interi_dir": None}
+            done = {"status": "split_done", "parts": [], "skipped": 1, "errors": []}
         else:
-            parts = split_pdf(target, out_dir, max_pages, max_mb)
-            names = [str(p) for p in parts]
-            summary = {"parts": names}
-            done = {"status": "split_done", "parts": names}
+            names = partition_in_place(target, max_pages, max_mb)
+            summary = {"parts": names, "interi_dir": str(target.parent / "interi")}
+            done = {"status": "split_done", "parts": names, "skipped": 0, "errors": []}
         with _LOCK:
             _JOB["summary"] = summary
             _JOB["events"].append(done)

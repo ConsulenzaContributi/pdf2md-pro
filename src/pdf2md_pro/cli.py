@@ -97,7 +97,7 @@ def _cmd_batch(args) -> int:
 
 
 def _cmd_split(args) -> int:
-    from pdf2md_pro.core.splitter import split_folder, split_pdf
+    from pdf2md_pro.core.splitter import needs_split, partition_in_place, split_folder
 
     if args.max_pages is None and args.max_mb is None:
         print("errore: indicare --max-pages e/o --max-mb", file=sys.stderr)
@@ -105,25 +105,25 @@ def _cmd_split(args) -> int:
     target = Path(args.input)
     try:
         if target.is_dir():
-            summary = split_folder(
-                target, Path(args.out_dir), args.max_pages, args.max_mb
-            )
+            summary = split_folder(target, args.max_pages, args.max_mb)
             for name, parts in summary["split"].items():
                 print(f"{name} → {len(parts)} parti: {', '.join(parts)}")
             for name in summary["skipped"]:
                 print(f"{name}: già nei limiti")
             for message in summary["errors"]:
                 print(f"ERRORE {message}", file=sys.stderr)
+            if summary["split"]:
+                print(f"originali spostati in {summary['interi_dir']}")
             return 0 if not summary["errors"] else 1
-        parts = split_pdf(target, Path(args.out_dir), args.max_pages, args.max_mb)
+        if not needs_split(target, args.max_pages, args.max_mb):
+            print("già nei limiti: nessuna partizione necessaria")
+            return 0
+        names = partition_in_place(target, args.max_pages, args.max_mb)
     except Exception as exc:
         print(f"errore: {exc}", file=sys.stderr)
         return 2
-    if parts == [target]:
-        print("già nei limiti: nessuna partizione necessaria")
-    else:
-        for part in parts:
-            print(f"scritto {part}")
+    print(f"{len(names)} parti create in {target.parent}: {', '.join(names)}")
+    print(f"originale spostato in {target.parent / 'interi'}")
     return 0
 
 
@@ -166,10 +166,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_batch.set_defaults(fn=_cmd_batch)
 
     p_split = sub.add_parser(
-        "split", help="partiziona un PDF, o tutti i PDF di una cartella, oltre i limiti"
+        "split",
+        help="partiziona in loco un PDF o tutti i PDF di una cartella oltre i limiti "
+        "(parti nella cartella, originali spostati in interi/)",
     )
     p_split.add_argument("input", help="file PDF o cartella da analizzare")
-    p_split.add_argument("-o", "--out-dir", default=".")
     p_split.add_argument("--max-pages", type=int)
     p_split.add_argument("--max-mb", type=float)
     p_split.set_defaults(fn=_cmd_split)

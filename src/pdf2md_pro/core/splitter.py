@@ -15,12 +15,16 @@ superano i limiti, anche in maniera congiunta (basta superare uno dei fattori).
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Callable
 
 import pymupdf
 
+from pdf2md_pro.core.naming import unique_path
+
 MB = 1024 * 1024
+INTERI_DIR = "interi"  # sottocartella dove finiscono gli originali spezzati
 
 
 def list_pdfs(folder: Path) -> list[Path]:
@@ -128,31 +132,48 @@ def analyze_folder(
     return report
 
 
+def partition_in_place(
+    pdf: Path, max_pages: int | None = None, max_mb: float | None = None
+) -> list[str]:
+    """Crea le parti nella stessa cartella del PDF e sposta l'originale in
+    `interi/`. Ritorna i nomi delle parti. Presuppone che il file vada spezzato."""
+    pdf = Path(pdf)
+    folder = pdf.parent
+    parts = split_pdf(pdf, folder, max_pages, max_mb)
+    interi = folder / INTERI_DIR
+    interi.mkdir(exist_ok=True)
+    shutil.move(str(pdf), str(unique_path(interi, pdf.stem, pdf.suffix)))
+    return [p.name for p in parts]
+
+
 def split_folder(
     source_dir: Path,
-    out_dir: Path,
     max_pages: int | None = None,
     max_mb: float | None = None,
     progress: Callable[[dict], None] = lambda e: None,
 ) -> dict:
-    """Partiziona tutti i PDF della cartella che superano i limiti.
+    """Partiziona i PDF della cartella oltre i limiti, in loco.
 
-    Ritorna `{"split": {nome: [parti]}, "skipped": [nomi], "errors": [msg]}`.
-    Un file rotto non ferma l'analisi degli altri.
+    Le parti restano nella cartella elaborata; ogni originale spezzato viene
+    spostato nella sottocartella `interi/`. I file già nei limiti non si toccano.
+    Ritorna `{"split": {nome: [parti]}, "skipped": [nomi], "errors": [msg],
+    "interi_dir": percorso}`. Un file rotto non ferma gli altri.
     """
     source = Path(source_dir)
     if not source.is_dir():
         raise ValueError(f"cartella non trovata: {source}")
 
-    summary: dict = {"split": {}, "skipped": [], "errors": []}
-    for pdf in list_pdfs(source):
+    summary: dict = {
+        "split": {}, "skipped": [], "errors": [],
+        "interi_dir": str(source / INTERI_DIR),
+    }
+    for pdf in list_pdfs(source):  # materializzato: le parti create non rientrano
         try:
             if not needs_split(pdf, max_pages, max_mb):
                 summary["skipped"].append(pdf.name)
                 progress({"status": "skip", "file": pdf.name})
                 continue
-            parts = split_pdf(pdf, out_dir, max_pages, max_mb)
-            names = [p.name for p in parts]
+            names = partition_in_place(pdf, max_pages, max_mb)
             summary["split"][pdf.name] = names
             progress({"status": "split", "file": pdf.name, "parts": len(names)})
         except Exception as exc:
