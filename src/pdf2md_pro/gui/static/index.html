@@ -149,12 +149,6 @@
             <button type="button" class="browse" data-pick="file" data-target="split-input">File…</button>
           </span>
         </label>
-        <label>Cartella di uscita delle parti
-          <span class="browse-row">
-            <input type="text" id="split-out" class="mono" placeholder="/percorso/parti">
-            <button type="button" class="browse" data-pick="folder" data-target="split-out">Sfoglia…</button>
-          </span>
-        </label>
         <div class="grid-2">
           <label>Massimo pagine
             <input type="number" id="tool-max-pages" min="1" placeholder="es. 100">
@@ -164,13 +158,14 @@
           </label>
         </div>
         <button id="analyze-start" class="secondary">1 · Analizza i file oltre i limiti</button>
-        <button id="split-start" class="secondary">2 · Partiziona i file selezionati</button>
-        <button id="convert-parts" class="secondary">3 · Elabora gli MD dalle parti</button>
-        <p class="note">L'analisi è preliminare e non scrive nulla: elenca ogni PDF con
-          pagine, MB e quali limiti supera (anche congiunti). La partizione produce parti
-          <code>nome 03 01.pdf</code> = totale sezioni + numero progressivo. Il passo 3
-          converte la cartella di uscita in Markdown usando motore e destinazione
-          della sezione 01.</p>
+        <button id="split-start" class="secondary">2 · Partiziona (in loco)</button>
+        <button id="convert-parts" class="secondary">3 · Elabora gli MD dalla cartella</button>
+        <p class="note">L'analisi non scrive nulla: elenca ogni PDF con pagine, MB e limiti
+          superati. La partizione lavora <b>in loco</b>: le parti
+          <code>nome 03 01.pdf</code> (totale sezioni + progressivo) restano nella cartella,
+          e ogni originale spezzato viene spostato nella sottocartella <code>interi/</code>.
+          Il passo 3 converte la stessa cartella in Markdown (motore e destinazione della
+          sezione 01); <code>interi/</code> viene ignorata.</p>
       </fieldset>
 
       <h2 class="section-title">03 · Registro</h2>

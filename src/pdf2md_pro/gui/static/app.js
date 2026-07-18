@@ -63,7 +63,7 @@ document
 const CONFIG_KEY = "pdf2md-pro:config:v1";
 const TEXT_IDS = [
   "local-model", "ollama-url", "model", "source-dir", "dest-dir", "max-files",
-  "split-pages", "split-mb", "split-input", "split-out",
+  "split-pages", "split-mb", "split-input",
   "tool-max-pages", "tool-max-mb",
 ];
 const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic"];
@@ -213,7 +213,10 @@ function describe(e) {
     case "split_done": {
       const extra = e.skipped != null ? `\n(${e.skipped} file già nei limiti)` : "";
       const errs = (e.errors || []).length ? `\nErrori: ${e.errors.join("; ")}` : "";
-      return [`Parti scritte:\n  ${e.parts.join("\n  ")}${extra}${errs}`, errs ? "err" : "ok"];
+      const head = e.parts.length
+        ? `Parti create nella cartella (originali spostati in interi/):\n  ${e.parts.join("\n  ")}`
+        : "Nessun file da partizionare.";
+      return [`${head}${extra}${errs}`, errs ? "err" : "ok"];
     }
     default: return [JSON.stringify(e), "dim"];
   }
@@ -334,14 +337,14 @@ startBtn.addEventListener("click", () => {
   submitConvert(buildConvertPayload($("source-dir").value.trim(), onlyFiles));
 });
 
-// passo 3 del partizionatore: converte la cartella delle parti in Markdown
+// passo 3: converte la cartella elaborata (parti + file già nei limiti) in Markdown
 convertPartsBtn.addEventListener("click", () => {
-  const partsDir = $("split-out").value.trim();
-  if (!partsDir) {
-    addLog("Indicare la cartella di uscita delle parti (passo 2).", "err");
+  const folder = $("split-input").value.trim();
+  if (!folder) {
+    addLog("Indicare la cartella elaborata (campo del passo 1).", "err");
     return;
   }
-  submitConvert(buildConvertPayload(partsDir));
+  submitConvert(buildConvertPayload(folder));
 });
 
 // passo 1 del partizionatore: analisi preliminare, nessuna scrittura
@@ -394,12 +397,11 @@ splitBtn.addEventListener("click", () => {
   if (offlineBlocked()) return;
   const payload = {
     input: $("split-input").value.trim(),
-    out_dir: $("split-out").value.trim(),
     max_pages: num("tool-max-pages"),
     max_mb: num("tool-max-mb"),
   };
-  if (!payload.input || !payload.out_dir) {
-    addLog("Indicare file PDF e cartella di uscita.", "err");
+  if (!payload.input) {
+    addLog("Indicare la cartella (o il PDF) da partizionare.", "err");
     return;
   }
   if (payload.max_pages === null && payload.max_mb === null) {
