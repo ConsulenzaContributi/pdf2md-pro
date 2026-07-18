@@ -101,6 +101,8 @@
           <label class="check"><input type="checkbox" id="extract-images" checked>
             <span>Estrai immagini in <code>assets/</code></span></label>
         </div>
+        <label class="check"><input type="checkbox" id="rename-topic">
+          <span>Rinomina per argomento (max 10 caratteri) invece del nome originale</span></label>
       </fieldset>
 
       <fieldset class="card">
@@ -118,10 +120,10 @@
       </fieldset>
 
       <button id="start" class="primary">Avvia conversione</button>
-      <p class="note">I file .md sono rinominati per argomento (max 10 caratteri).
-        Ogni conversione produce anche il sidecar <code>.provenance.json</code>.
-        Le impostazioni vengono salvate automaticamente e ricaricate al prossimo avvio
-        (la chiave API solo se spunti "Ricorda la chiave").</p>
+      <p class="note">Ogni file .md mantiene il nome del PDF originale (salvo l'opzione
+        "Rinomina per argomento"). Ogni conversione produce anche il sidecar
+        <code>.provenance.json</code>. Le impostazioni vengono salvate automaticamente e
+        ricaricate al prossimo avvio (la chiave API solo se spunti "Ricorda la chiave").</p>
     </section>
 
     <section class="col" aria-labelledby="split-h">

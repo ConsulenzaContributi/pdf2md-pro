@@ -31,7 +31,7 @@ def folders(tmp_path):
     return src, dest
 
 
-def test_batch_converts_and_renames_by_topic(folders):
+def test_batch_keeps_original_pdf_name_by_default(folders):
     src, dest = folders
     events = []
     summary = run_batch(
@@ -42,15 +42,29 @@ def test_batch_converts_and_renames_by_topic(folders):
     assert summary["converted"] == 2
     assert summary["errors"] == []
     md_files = sorted(p.name for p in dest.glob("*.md"))
-    assert len(md_files) == 2
-    for name in md_files:
-        assert len(name.removesuffix(".md")) <= 10
-    sidecars = list(dest.glob("*.provenance.json"))
-    assert len(sidecars) == 2
+    # il md tiene lo stesso nome del pdf originale
+    assert md_files == ["a.md", "b.md"]
+    assert {p.name for p in dest.glob("*.provenance.json")} == {
+        "a.provenance.json",
+        "b.provenance.json",
+    }
 
     statuses = [e["status"] for e in events]
     assert statuses.count("start") == 2
     assert statuses.count("done") == 2
+
+
+def test_batch_rename_by_topic_when_enabled(folders):
+    src, dest = folders
+    run_batch(
+        BatchConfig(
+            source_dir=src, dest_dir=dest, extract_images=False, rename_by_topic=True
+        )
+    )
+    md_files = sorted(p.name for p in dest.glob("*.md"))
+    assert md_files != ["a.md", "b.md"]  # rinominati per argomento
+    for name in md_files:
+        assert len(name.removesuffix(".md")) <= 10
 
 
 def test_batch_respects_max_files(folders):
