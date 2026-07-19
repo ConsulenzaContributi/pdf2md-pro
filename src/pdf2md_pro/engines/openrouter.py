@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import json
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -136,9 +137,29 @@ class OpenRouterEngine:
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            data = json.loads(response.read().decode())
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"API {exc.code}: {_error_detail(exc)}") from exc
+        if "choices" not in data:
+            raise RuntimeError(f"risposta API senza contenuto: {_api_message(data)}")
         return data["choices"][0]["message"]["content"]
+
+
+def _api_message(data: dict) -> str:
+    """Estrae il messaggio d'errore da una risposta API OpenAI-compatibile."""
+    error = data.get("error")
+    if isinstance(error, dict) and error.get("message"):
+        return str(error["message"])
+    return str(error or data)[:200]
+
+
+def _error_detail(exc: urllib.error.HTTPError) -> str:
+    try:
+        return _api_message(json.loads(exc.read().decode()))
+    except Exception:
+        return str(exc.reason)
 
 
 def ensure_ollama(url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> None:

@@ -1,19 +1,38 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf2md-pro"
-version = "0.1.0"
-description = "PDF to Markdown converter with per-page hybrid routing and provenance"
+dynamic = ["version"]
+description = "Convertitore PDF → Markdown con routing ibrido per pagina, OCR e provenienza totale"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["pymupdf4llm>=0.0.17"]
+authors = [{ name = "Vincenzo Vignola" }]
+keywords = ["pdf", "markdown", "ocr", "llm", "conversion", "provenance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = ["pymupdf4llm>=1.28,<2"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "build>=1.2", "pip-audit>=2.7"]
 
 [project.scripts]
 pdf2md = "pdf2md_pro.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "pdf2md_pro.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

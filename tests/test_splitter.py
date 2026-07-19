@@ -140,6 +140,18 @@ def test_list_pdfs_skips_appledouble_and_hidden(tmp_path):
     assert names == ["vero.pdf"]
 
 
+def test_list_pdfs_estensione_case_insensitive(tmp_path):
+    from pdf2md_pro.core.splitter import list_pdfs
+
+    _make_pdf(tmp_path / "minuscolo.pdf", 1)
+    maiuscolo = tmp_path / "MAIUSCOLO.PDF"
+    _make_pdf(maiuscolo, 1)
+    (tmp_path / "non-pdf.txt").write_text("no")
+
+    names = [p.name for p in list_pdfs(tmp_path)]
+    assert names == ["MAIUSCOLO.PDF", "minuscolo.pdf"]
+
+
 def test_analyze_folder_ignores_appledouble(tmp_path):
     from pdf2md_pro.core.splitter import analyze_folder
 

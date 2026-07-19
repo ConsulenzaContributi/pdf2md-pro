@@ -28,10 +28,12 @@ INTERI_DIR = "interi"  # sottocartella dove finiscono gli originali spezzati
 
 
 def list_pdfs(folder: Path) -> list[Path]:
-    """PDF reali della cartella, ordinati. Esclude i file nascosti e gli
-    AppleDouble di macOS (`._nome.pdf`), che non sono documenti veri."""
+    """PDF reali della cartella, ordinati. Estensione case-insensitive
+    (`.pdf`/`.PDF`). Esclude i file nascosti e gli AppleDouble di macOS
+    (`._nome.pdf`), che non sono documenti veri."""
     return sorted(
-        p for p in Path(folder).glob("*.pdf") if not p.name.startswith(".")
+        p for p in Path(folder).iterdir()
+        if p.is_file() and p.suffix.lower() == ".pdf" and not p.name.startswith(".")
     )
 
 

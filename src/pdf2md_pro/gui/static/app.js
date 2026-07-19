@@ -64,9 +64,10 @@ const CONFIG_KEY = "pdf2md-pro:config:v1";
 const TEXT_IDS = [
   "local-model", "ollama-url", "model", "source-dir", "dest-dir", "max-files",
   "split-pages", "split-mb", "split-input", "split-interi",
-  "tool-max-pages", "tool-max-mb",
+  "tool-max-pages", "tool-max-mb", "adv-margins", "adv-table-strategy", "adv-dpi",
+  "adv-image-size-limit", "adv-graphics-limit"
 ];
-const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic"];
+const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images"];
 const RADIO_NAMES = ["mode", "provider"];
 
 function saveConfig() {
@@ -109,6 +110,54 @@ fetch("/api/version")
   .then((r) => r.json())
   .then((d) => { if (d.version) $("app-version").textContent = "v" + d.version; })
   .catch(() => {});
+
+// riaggancio a job in corso
+fetch("/api/state", { cache: "no-store" })
+  .then((r) => r.json())
+  .then((state) => {
+    if (state.running) {
+      addLog("Job in esecuzione trovato, riaggancio in corso...", "dim");
+      beginJob();
+    } else {
+      checkResumeState();
+    }
+  })
+  .catch(() => { checkResumeState(); });
+
+let currentResumeState = null;
+
+function checkResumeState() {
+  fetch("/api/resume-state", { cache: "no-store" })
+    .then((r) => r.json())
+    .then((state) => {
+      if (state && state.config) {
+        currentResumeState = state;
+        const total = state.original_total;
+        const remaining = total - (state.completed_files || []).length;
+        if (remaining > 0) {
+          $("resume-total").textContent = total;
+          $("resume-remaining").textContent = remaining;
+          $("resume-banner").hidden = false;
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+$("resume-dismiss-btn").addEventListener("click", () => {
+  $("resume-banner").hidden = true;
+  currentResumeState = null;
+});
+
+$("resume-start-btn").addEventListener("click", () => {
+  if (!currentResumeState) return;
+  $("resume-banner").hidden = true;
+  const payload = currentResumeState.config;
+  payload.completed_files = currentResumeState.completed_files;
+  // la chiave API non viene mai salvata in resume.json: la reinseriamo dal campo
+  if (!payload.api_key) payload.api_key = $("api-key").value.trim();
+  submitConvert(payload);
+});
 
 // --- Selezione dei file da convertire ---
 const fileList = $("file-list");
@@ -224,8 +273,12 @@ function describe(e) {
 }
 
 function applyState(state) {
-  (state.events || []).slice(renderedEvents).forEach((e) => addLog(...describe(e)));
-  renderedEvents = (state.events || []).length;
+  // il server tiene solo gli ultimi 500 eventi: l'offset riallinea il log
+  const events = state.events || [];
+  const total = state.events_total != null ? state.events_total : events.length;
+  const offset = total - events.length;
+  events.slice(Math.max(0, renderedEvents - offset)).forEach((e) => addLog(...describe(e)));
+  renderedEvents = total;
 
   if (state.kind === "convert" && state.total > 0) {
     const pct = Math.round((state.done / state.total) * 100);
@@ -260,16 +313,20 @@ function stopPolling() {
 }
 
 function sendControl(path) {
-  fetch(path, { method: "POST" }).catch(() => {});
+  return fetch(path, { method: "POST" }).catch(() => {});
 }
 pauseBtn.addEventListener("click", () => { sendControl("/api/pause"); pauseBtn.hidden = true; resumeBtn.hidden = false; });
 resumeBtn.addEventListener("click", () => { sendControl("/api/resume"); resumeBtn.hidden = true; pauseBtn.hidden = false; });
 stopBtn.addEventListener("click", () => {
-  if (confirm("Interrompere la conversione dopo il file in corso?")) sendControl("/api/stop");
+  if (confirm("Interrompere la conversione dopo il file in corso?")) {
+    stopBtn.disabled = true;
+    addLog("Interruzione programmata: attesa fine del file in corso...", "dim");
+    sendControl("/api/stop");
+  }
 });
 
 function poll() {
-  fetch("/api/state")
+  fetch("/api/state", { cache: "no-store" })
     .then((r) => r.json())
     .then(applyState)
     .catch(() => {});
@@ -281,6 +338,7 @@ function beginJob() {
   banner.hidden = false;
   bannerFill.style.width = "0%";
   [startBtn, splitBtn, analyzeBtn, convertPartsBtn].forEach((b) => { b.disabled = true; });
+  stopBtn.disabled = false;
   pollTimer = setInterval(poll, 700);
 }
 
@@ -297,6 +355,15 @@ function post(url, payload) {
 function buildConvertPayload(sourceDir, onlyFiles = null) {
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const provider = document.querySelector('input[name="provider"]:checked').value;
+  let margins = null;
+  const marginsStr = $("adv-margins").value.trim();
+  if (marginsStr) {
+    const parts = marginsStr.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+    if (parts.length === 1) margins = [parts[0], parts[0], parts[0], parts[0]];
+    else if (parts.length === 2) margins = [parts[1], parts[0], parts[1], parts[0]]; // left, top, right, bottom da horiz, vert
+    else if (parts.length === 4) margins = [parts[3], parts[0], parts[1], parts[2]]; // css -> rect (left, top, right, bottom)
+  }
+
   return {
     source_dir: sourceDir,
     dest_dir: $("dest-dir").value.trim(),
@@ -312,6 +379,15 @@ function buildConvertPayload(sourceDir, onlyFiles = null) {
     split_mb: num("split-mb"),
     extract_images: $("extract-images").checked,
     rename_by_topic: $("rename-topic").checked,
+    llm_topic: $("llm-topic").checked,
+    margins,
+    table_strategy: $("adv-table-strategy").value,
+    use_ocr: $("adv-use-ocr").checked,
+    force_ocr: $("adv-force-ocr").checked,
+    dpi: num("adv-dpi"),
+    ignore_images: $("adv-ignore-images").checked,
+    image_size_limit: num("adv-image-size-limit"),
+    graphics_limit: num("adv-graphics-limit"),
   };
 }
 
@@ -326,7 +402,15 @@ function submitConvert(payload) {
     return;
   }
   beginJob();
-  post("/api/convert", payload).catch((e) => { addLog("ERRORE: " + fetchErrorText(e), "err"); stopPolling(); });
+  post("/api/convert", payload).catch((e) => {
+    addLog("ERRORE: " + fetchErrorText(e), "err");
+    if (e.message && e.message.includes("già in esecuzione")) {
+      addLog("Riaggancio al job in corso...", "dim");
+      // non chiamiamo stopPolling() così continua ad aggiornarsi
+    } else {
+      stopPolling();
+    }
+  });
 }
 
 startBtn.addEventListener("click", () => {
@@ -347,6 +431,22 @@ convertPartsBtn.addEventListener("click", () => {
   }
   submitConvert(buildConvertPayload(folder));
 });
+
+if ($("restart-server-btn")) {
+  $("restart-server-btn").addEventListener("click", () => {
+    if (confirm("Sei sicuro di voler riavviare il server? Ogni operazione in corso verrà abbattuta immediatamente e non potrà essere conclusa (ma l'avanzamento verrà salvato).")) {
+      addLog("Riavvio hard del server in corso...", "dim");
+      $("restart-server-btn").disabled = true;
+      fetch("/api/restart", { method: "POST" })
+        .then(() => {
+          setTimeout(() => { location.reload(); }, 2500);
+        })
+        .catch(() => {
+          setTimeout(() => { location.reload(); }, 2500);
+        });
+    }
+  });
+}
 
 // passo 1 del partizionatore: analisi preliminare, nessuna scrittura
 analyzeBtn.addEventListener("click", async () => {
@@ -411,7 +511,15 @@ splitBtn.addEventListener("click", () => {
     return;
   }
   beginJob();
-  post("/api/split", payload).catch((e) => { addLog("ERRORE: " + fetchErrorText(e), "err"); stopPolling(); });
+  post("/api/split", payload).catch((e) => {
+    addLog("ERRORE: " + fetchErrorText(e), "err");
+    if (e.message && e.message.includes("già in esecuzione")) {
+      addLog("Riaggancio al job in corso...", "dim");
+      // non chiamiamo stopPolling() così continua ad aggiornarsi
+    } else {
+      stopPolling();
+    }
+  });
 });
 
 // Avviso immediato se la pagina è stata aperta come file locale.

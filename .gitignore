@@ -5,3 +5,13 @@ __pycache__/
 dist/
 *.egg-info/
 output/
+
+# Artefatti interni del bundle VgdV (log, blueprint, demo, report): locali, non pubblici
+archivio_versioni.xlsx
+docs/BLUEPRINT_*
+docs/DEMO_*
+docs/GUIDA_*
+docs/HEALTH_*
+docs/TUTORIAL.md
+docs/report/
+docs/superpowers/

@@ -15,6 +15,9 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import multiprocessing
+import queue
+
 from pdf2md_pro.core.batch import BatchConfig, JobControl, run_batch
 from pdf2md_pro.core.splitter import (
     analyze_folder,
@@ -29,19 +32,50 @@ MAX_EVENTS = 500
 
 _LOCK = threading.Lock()
 _JOB: dict = {"running": False, "kind": None, "events": [], "summary": None, "error": None}
-_CONTROL: JobControl | None = None
+_CONTROL_RUNNING: multiprocessing.Event | None = None
+_CONTROL_STOP: multiprocessing.Event | None = None
+_Q: multiprocessing.Queue | None = None
+_PROCESS: multiprocessing.Process | None = None
+
+def _queue_listener() -> None:
+    while True:
+        if _Q is None:
+            import time
+            time.sleep(0.5)
+            continue
+        try:
+            msg = _Q.get(timeout=0.5)
+            if msg is None:
+                continue
+            if msg["type"] == "event":
+                _progress(msg["data"])  # prende _LOCK internamente: niente nesting (deadlock)
+            else:
+                with _LOCK:
+                    if msg["type"] == "summary":
+                        _JOB["summary"] = msg["data"]
+                    elif msg["type"] == "error":
+                        _JOB["error"] = msg["data"]
+                    elif msg["type"] == "done":
+                        _JOB["running"] = False
+        except queue.Empty:
+            continue
+        except Exception:
+            pass
+
+threading.Thread(target=_queue_listener, daemon=True).start()
 
 
 def _reset_job(kind: str) -> None:
     _JOB.update(
-        running=True, kind=kind, events=[], summary=None, error=None,
-        done=0, total=0, current="", paused=False,
+        running=True, kind=kind, events=[], events_total=0, summary=None,
+        error=None, done=0, total=0, current="", paused=False,
     )
 
 
 def _progress(event: dict) -> None:
     with _LOCK:
         _JOB["events"] = (_JOB["events"] + [event])[-MAX_EVENTS:]
+        _JOB["events_total"] = _JOB.get("events_total", 0) + 1
         status = event.get("status")
         if status == "batch_start":
             _JOB["total"] = event.get("total", 0)
@@ -63,7 +97,9 @@ def _clean_path(raw: str) -> Path:
     return Path(text)
 
 
-def _run_convert(payload: dict) -> None:
+def _child_convert(payload: dict, q: multiprocessing.Queue, r_evt: multiprocessing.Event, s_evt: multiprocessing.Event) -> None:
+    def child_progress(event):
+        q.put({"type": "event", "data": event})
     try:
         config = BatchConfig(
             source_dir=_clean_path(payload["source_dir"]),
@@ -80,21 +116,31 @@ def _run_convert(payload: dict) -> None:
             split_mb=payload.get("split_mb") or None,
             extract_images=bool(payload.get("extract_images", True)),
             rename_by_topic=bool(payload.get("rename_by_topic")),
+            llm_topic=bool(payload.get("llm_topic", True)),
+            margins=tuple(payload.get("margins")) if payload.get("margins") else None,
+            table_strategy=payload.get("table_strategy", "lines_strict"),
+            use_ocr=bool(payload.get("use_ocr")),
+            force_ocr=bool(payload.get("force_ocr")),
+            dpi=payload.get("dpi"),
+            ignore_images=bool(payload.get("ignore_images")),
+            image_size_limit=payload.get("image_size_limit"),
+            graphics_limit=payload.get("graphics_limit"),
         )
-        global _CONTROL
-        _CONTROL = JobControl()
-        summary = run_batch(config, progress=_progress, control=_CONTROL)
-        with _LOCK:
-            _JOB["summary"] = summary
+        control = JobControl()
+        control._running = r_evt
+        control._stop = s_evt
+        completed = set(payload.get("completed_files", []))
+        summary = run_batch(config, progress=child_progress, control=control, completed_files=completed)
+        q.put({"type": "summary", "data": summary})
     except Exception as exc:
-        with _LOCK:
-            _JOB["error"] = str(exc)
+        q.put({"type": "error", "data": str(exc)})
     finally:
-        with _LOCK:
-            _JOB["running"] = False
+        q.put({"type": "done"})
 
 
-def _run_split(payload: dict) -> None:
+def _child_split(payload: dict, q: multiprocessing.Queue) -> None:
+    def child_progress(event):
+        q.put({"type": "event", "data": event})
     try:
         target = _clean_path(payload["input"])
         max_pages = payload.get("max_pages") or None
@@ -102,7 +148,7 @@ def _run_split(payload: dict) -> None:
         interi = _clean_path(payload["interi_dir"]) if payload.get("interi_dir") else None
         if target.is_dir():
             summary = split_folder(
-                target, max_pages, max_mb, progress=_progress, interi_dir=interi
+                target, max_pages, max_mb, progress=child_progress, interi_dir=interi
             )
             names = [p for parts in summary["split"].values() for p in parts]
             done = {"status": "split_done", "parts": names, "interi_dir": summary["interi_dir"],
@@ -116,15 +162,12 @@ def _run_split(payload: dict) -> None:
             summary = {"parts": names, "interi_dir": interi_used}
             done = {"status": "split_done", "parts": names, "interi_dir": interi_used,
                     "skipped": 0, "errors": []}
-        with _LOCK:
-            _JOB["summary"] = summary
-            _JOB["events"].append(done)
+        q.put({"type": "summary", "data": summary})
+        q.put({"type": "event", "data": done})
     except Exception as exc:
-        with _LOCK:
-            _JOB["error"] = str(exc)
+        q.put({"type": "error", "data": str(exc)})
     finally:
-        with _LOCK:
-            _JOB["running"] = False
+        q.put({"type": "done"})
 
 
 def _pick_path(kind: str) -> dict:
@@ -158,6 +201,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.end_headers()
         self.wfile.write(body)
 
@@ -176,7 +220,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, (STATIC_DIR / filename).read_bytes(), content_type)
         elif parsed.path == "/api/state":
             with _LOCK:
-                self._send_json(200, dict(_JOB))
+                snapshot = dict(_JOB)
+                snapshot["events"] = list(_JOB["events"])  # no riferimento condiviso
+            self._send_json(200, snapshot)
+        elif parsed.path == "/api/resume-state":
+            resume_file = Path.home() / ".pdf2md" / "resume.json"
+            if resume_file.exists():
+                try:
+                    state_data = json.loads(resume_file.read_text(encoding="utf-8"))
+                    self._send_json(200, state_data)
+                except Exception:
+                    self._send_json(200, {})
+            else:
+                self._send_json(200, {})
         elif parsed.path == "/api/pick":
             kind = urllib.parse.parse_qs(parsed.query).get("kind", ["folder"])[0]
             self._send_json(200, _pick_path(kind))
@@ -194,6 +250,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "non trovato"})
 
     def do_POST(self) -> None:  # noqa: N802
+        global _Q, _PROCESS, _CONTROL_RUNNING, _CONTROL_STOP
         length = int(self.headers.get("Content-Length", 0))
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -213,20 +270,45 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": str(exc)})
             return
 
-        if self.path in ("/api/pause", "/api/resume", "/api/stop"):
-            if _CONTROL is None or not _JOB["running"]:
+        if self.path in ("/api/pause", "/api/resume", "/api/stop", "/api/restart"):
+            if self.path == "/api/restart":
+                if _PROCESS is not None and _PROCESS.is_alive():
+                    _PROCESS.terminate()
+                with _LOCK:
+                    _JOB["running"] = False
+                    _JOB["events"].append({"status": "stopped", "index": _JOB.get("done", 0)})
+                    _JOB["events_total"] = _JOB.get("events_total", 0) + 1
+                self._send_json(200, {"ok": True})
+                import os
+                import sys
+                import time
+                def _do_restart():
+                    time.sleep(0.5)
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                threading.Thread(target=_do_restart, daemon=False).start()
+                return
+
+            if _PROCESS is None or not _JOB["running"]:
                 self._send_json(409, {"error": "nessuna conversione in corso"})
                 return
             if self.path == "/api/pause":
-                _CONTROL.pause()
+                if _CONTROL_RUNNING:
+                    _CONTROL_RUNNING.clear()
             elif self.path == "/api/resume":
-                _CONTROL.resume()
+                if _CONTROL_RUNNING:
+                    _CONTROL_RUNNING.set()
             else:
-                _CONTROL.stop()
+                # stop graceful: il file in corso viene completato, poi run_batch
+                # esce ed emette "stopped"/"done" via coda (il terminate hard
+                # resta solo in /api/restart)
+                if _CONTROL_STOP:
+                    _CONTROL_STOP.set()
+                if _CONTROL_RUNNING:
+                    _CONTROL_RUNNING.set()  # sblocca l'eventuale pausa
             self._send_json(200, {"ok": True})
             return
 
-        targets = {"/api/convert": ("convert", _run_convert), "/api/split": ("split", _run_split)}
+        targets = {"/api/convert": ("convert", _child_convert), "/api/split": ("split", _child_split)}
         if self.path not in targets:
             self._send_json(404, {"error": "non trovato"})
             return
@@ -236,7 +318,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(409, {"error": "un job è già in esecuzione"})
                 return
             _reset_job(kind)
-        threading.Thread(target=runner, args=(payload,), daemon=True).start()
+            if _Q is None:
+                _Q = multiprocessing.Queue()
+            _CONTROL_RUNNING = multiprocessing.Event()
+            _CONTROL_RUNNING.set()
+            _CONTROL_STOP = multiprocessing.Event()
+        
+        args = (payload, _Q, _CONTROL_RUNNING, _CONTROL_STOP) if kind == "convert" else (payload, _Q)
+        _PROCESS = multiprocessing.Process(target=runner, args=args, daemon=True)
+        _PROCESS.start()
         self._send_json(202, {"ok": True})
 
 

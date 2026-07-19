@@ -34,11 +34,31 @@ def _run_engines(
     pages: list[int] | None,
     llm_engine,
     mode: str,
+    margins: tuple[float, float, float, float] | None = None,
+    table_strategy: str = "lines_strict",
+    use_ocr: bool = False,
+    force_ocr: bool = False,
+    dpi: int | None = None,
+    ignore_images: bool = False,
+    image_size_limit: float | None = None,
+    graphics_limit: int | None = None,
 ):
     """Ritorna (risultati ordinati per pagina, etichetta motore complessivo)."""
     native = NativeEngine()
     if mode == "native" or llm_engine is None:
-        return native.convert(pdf_path, image_dir=image_dir, pages=pages), native.name
+        return native.convert(
+            pdf_path,
+            image_dir=image_dir,
+            pages=pages,
+            margins=margins,
+            table_strategy=table_strategy,
+            use_ocr=use_ocr,
+            force_ocr=force_ocr,
+            dpi=dpi,
+            ignore_images=ignore_images,
+            image_size_limit=image_size_limit,
+            graphics_limit=graphics_limit,
+        ), native.name
     if mode == "llm":
         return llm_engine.convert(pdf_path, pages=pages), llm_engine.name
 
@@ -48,7 +68,13 @@ def _run_engines(
     llm_pages = [n for n, c in classes.items() if c != NATIVE]
     results = []
     if native_pages:
-        results.extend(native.convert(pdf_path, image_dir=image_dir, pages=native_pages))
+        results.extend(native.convert(
+            pdf_path, image_dir=image_dir, pages=native_pages,
+            margins=margins, table_strategy=table_strategy,
+            use_ocr=use_ocr, force_ocr=force_ocr, dpi=dpi,
+            ignore_images=ignore_images, image_size_limit=image_size_limit,
+            graphics_limit=graphics_limit,
+        ))
     if llm_pages:
         results.extend(llm_engine.convert(pdf_path, pages=llm_pages))
     results.sort(key=lambda r: r.page_number)
@@ -63,6 +89,14 @@ def convert(
     extract_images: bool = True,
     llm_engine=None,
     mode: str = "native",
+    margins: tuple[float, float, float, float] | None = None,
+    table_strategy: str = "lines_strict",
+    use_ocr: bool = False,
+    force_ocr: bool = False,
+    dpi: int | None = None,
+    ignore_images: bool = False,
+    image_size_limit: float | None = None,
+    graphics_limit: int | None = None,
 ) -> ConversionResult:
     pdf_path = Path(pdf_path)
     out_dir = Path(out_dir)
@@ -94,6 +128,14 @@ def convert(
         pages,
         llm_engine,
         mode,
+        margins=margins,
+        table_strategy=table_strategy,
+        use_ocr=use_ocr,
+        force_ocr=force_ocr,
+        dpi=dpi,
+        ignore_images=ignore_images,
+        image_size_limit=image_size_limit,
+        graphics_limit=graphics_limit,
     )
 
     digest = sha256_file(pdf_path)

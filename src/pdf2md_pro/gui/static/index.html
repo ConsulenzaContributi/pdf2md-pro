@@ -22,15 +22,33 @@
     </div>
   </div>
 
-  <header class="masthead">
-    <h1>pdf2md<span class="accent">·</span>pro <span id="app-version" class="version-badge"></span></h1>
-    <p class="tagline">Trascrizione PDF → Markdown per contenuti tecnico-accademici.
-      Tabelle, formule, figure descritte, provenienza per pagina.</p>
+  <header class="masthead" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1>pdf2md<span class="accent">·</span>pro <span id="app-version" class="version-badge"></span></h1>
+      <p class="tagline">Trascrizione PDF → Markdown per contenuti tecnico-accademici.<br>
+        Tabelle, formule, figure descritte, provenienza per pagina.</p>
+    </div>
+    <button type="button" id="restart-server-btn" class="secondary" style="border-color: var(--err); color: var(--err); margin: 0; padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Interrompe brutalmente ogni lavoro in corso e riavvia il server locale">⟳ Riavvia Server</button>
   </header>
+
+  <div id="resume-banner" hidden style="margin: 0 clamp(1rem, 4vw, 3rem) 1.5rem; padding: 1rem 1.5rem; background: var(--bg-inset); border: 1px solid var(--accent); border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 250px;">
+      <strong style="color: var(--accent);">Job Interrotto Rilevato</strong><br>
+      <span class="tagline" style="font-size: 0.9em;">Conversione in sospeso con <strong id="resume-remaining" style="color: var(--text);">X</strong> file rimanenti su <span id="resume-total">Y</span> totali. Puoi riprendere l'operazione esatta da dove si era fermata.</span>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <button type="button" id="resume-dismiss-btn" class="secondary" style="margin: 0;">Ignora</button>
+      <button type="button" id="resume-start-btn" class="primary" style="margin: 0;">Riprendi Ora</button>
+    </div>
+  </div>
 
   <main class="layout">
     <section class="col" aria-labelledby="conv-h">
       <h2 id="conv-h" class="section-title">01 · Conversione</h2>
+      
+      <div class="field-help" data-guida-sezione="conversione" data-guida-tipo="banner" style="background: var(--bg-inset); padding: 1rem; border-left: 3px solid var(--accent); margin-bottom: 1rem; font-size: 0.9em;">
+        <strong>Guida (v0.15.0):</strong> Questa è la sezione principale. Scegli il motore (Nativo è più veloce e senza costi, LLM ha qualità superiore), imposta cartella di origine e destinazione, e premi Start.
+      </div>
 
       <fieldset class="card">
         <legend>Motore</legend>
@@ -78,6 +96,99 @@
             </label>
           </div>
         </div>
+        
+        <details class="advanced-options" style="margin-top: 1rem; padding: 0.8rem; background: var(--bg-inset); border: 1px solid var(--line); border-radius: var(--radius);">
+          <summary style="cursor: pointer; font-weight: 600; color: var(--accent);">Configurazioni Avanzate di Estrazione</summary>
+          <div class="stack" style="margin-top: 1rem;">
+            
+            <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+              <label style="font-weight: bold; display: block; margin-bottom: 0.5rem;">✂️ Taglia i Margini (Cropbox)
+                <input type="text" id="adv-margins" placeholder="Es. 50, 0, 50, 0" style="margin-top: 0.5rem;">
+              </label>
+              <span class="note" style="display: block; font-size: 0.85em;">
+                <strong>A cosa serve?</strong> Immagina di leggere un libro e trovare in ogni pagina il titolo in alto e il numero in basso. Se il computer non "taglia" queste parti con le forbici virtuali, le leggerà in mezzo alle tue frasi scombinando il testo!<br>
+                <strong>Come si usa:</strong> Scrivi 4 numeri separati da virgola: <code>Alto, Destra, Basso, Sinistra</code>.
+                <ul style="margin-top: 0.2rem; margin-bottom: 0; padding-left: 1.2rem;">
+                  <li><code>0, 0, 0, 0</code> (Nessun taglio, il computer legge tutto il foglio).</li>
+                  <li><code>50, 0, 50, 0</code> (Taglia 50 punti in alto e 50 in basso. Ottimo per rimuovere numeri di pagina e intestazioni).</li>
+                  <li>Più il numero è alto, più il taglio verso il centro è grande.</li>
+                </ul>
+              </span>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+              <div class="grid-2">
+                <div>
+                  <label style="font-weight: bold;">📊 Strategia Tabelle
+                    <select id="adv-table-strategy" style="width: 100%; margin-top: 0.5rem;">
+                      <option value="lines_strict" selected>Rigorosa (lines_strict) - Consigliato</option>
+                      <option value="lines">Morbida (lines)</option>
+                      <option value="none">Nessuna (Disattiva)</option>
+                    </select>
+                  </label>
+                  <span class="note" style="display: block; margin-top: 0.5rem; font-size: 0.85em;">
+                    <strong>A cosa serve?</strong> Dice al computer come riconoscere le tabelle.<br>
+                    • <em>Rigorosa</em>: Cerca solo tabelle disegnate con linee scure ben visibili. Evita che il testo impaginato a colonne venga scambiato per una tabella.<br>
+                    • <em>Morbida</em>: Cerca di indovinare le tabelle anche se le linee sono parziali o invisibili. Potrebbe fare confusione.<br>
+                    • <em>Nessuna</em>: Legge tutto come testo semplice, senza creare righe e colonne.
+                  </span>
+                </div>
+                
+                <div>
+                  <label style="font-weight: bold;">🔎 Nitidezza Immagini (DPI)
+                    <input type="number" id="adv-dpi" min="72" max="600" placeholder="Es. 150" style="margin-top: 0.5rem;">
+                  </label>
+                  <span class="note" style="display: block; margin-top: 0.5rem; font-size: 0.85em;">
+                    <strong>A cosa serve?</strong> Decide quanto devono essere definiti i dettagli quando il computer "guarda" una pagina stampata.<br>
+                    • <em>Valore basso (es. 72)</em>: Velocissimo, ma l'immagine è sgranata. Ottimo se vuoi solo il testo in fretta.<br>
+                    • <em>Valore alto (es. 300)</em>: Lento, ma perfetto per leggere scritte piccolissime nelle foto o schemi tecnici complessi. Il valore normale è 150.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
+              <label style="font-weight: bold; margin-bottom: 0.5rem; display: block;">👁️ Lettura Ottica (OCR per Fotocopie)</label>
+              <div class="grid-2">
+                <label class="check"><input type="checkbox" id="adv-use-ocr">
+                  <span>Usa OCR solo se necessario</span></label>
+                <label class="check"><input type="checkbox" id="adv-force-ocr">
+                  <span>Forza OCR su tutte le pagine</span></label>
+              </div>
+              <span class="note" style="display: block; margin-top: 0.5rem; font-size: 0.85em;">
+                <strong>A cosa serve?</strong> Se il PDF è una fotografia o una fotocopia scannerizzata, non puoi selezionare il testo col mouse. L'OCR serve al computer per "leggere" le parole disegnate nella foto.<br>
+                • <em>Usa OCR solo se necessario</em>: Il computer lo usa solo se si accorge che la pagina è vuota di testo selezionabile.<br>
+                • <em>Forza OCR</em>: Legge <strong>tutto</strong> come se fosse una foto. È molto lento, ma usalo se il PDF ha caratteri strani o è illeggibile normalmente.<br>
+                <em>(L'OCR richiede il programma Tesseract installato sul tuo PC).</em>
+              </span>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
+              <label style="font-weight: bold; margin-bottom: 0.5rem; display: block;">🖼️ Gestione Immagini e Grafica</label>
+              <div class="grid-2">
+                <div>
+                  <label class="check"><input type="checkbox" id="adv-ignore-images">
+                    <span>Ignora completamente le immagini</span></label>
+                  <label style="margin-top: 0.5rem; display: block;">Soglia dimensione minima (0-1)
+                    <input type="number" id="adv-image-size-limit" min="0" max="1" step="0.01" placeholder="Es. 0.05">
+                  </label>
+                </div>
+                <div>
+                  <label style="font-weight: bold;">Limite elementi vettoriali per pagina
+                    <input type="number" id="adv-graphics-limit" min="1" placeholder="Es. 5000" style="margin-top: 0.5rem;">
+                  </label>
+                </div>
+              </div>
+              <span class="note" style="display: block; margin-top: 0.5rem; font-size: 0.85em;">
+                <strong>A cosa serve?</strong><br>
+                • <em>Ignora immagini</em>: non estrae nessuna immagine, conversione più veloce (utile per documenti solo testuali).<br>
+                • <em>Soglia dimensione minima</em>: scarta immagini troppo piccole (loghi, icone, bullet grafici) che sporcano il Markdown. 0.05 = scarta immagini sotto il 5% dell'area pagina.<br>
+                • <em>Limite elementi vettoriali</em>: evita che un PDF con disegni tecnici/CAD complessi blocchi la conversione analizzando migliaia di forme vettoriali.
+              </span>
+            </div>
+
+          </div>
+        </details>
       </fieldset>
 
       <fieldset class="card">
@@ -101,9 +212,12 @@
         </div>
         <label>Cartella destinazione (MD)
           <span class="browse-row">
-            <input type="text" id="dest-dir" class="mono" placeholder="/percorso/cartella/markdown">
+            <input type="text" id="dest-dir" class="mono" placeholder="es. /Users/nome/Documenti/Output_MD">
             <button type="button" class="browse" data-pick="folder" data-target="dest-dir">Sfoglia…</button>
           </span>
+          <div class="field-help" data-guida-sezione="conversione" data-guida-tipo="helpText" style="font-size: 0.8em; color: var(--text-dim); margin-top: 0.2rem;">
+            Qui verranno salvati i file .md e la cartella assets con le immagini.
+          </div>
         </label>
         <div class="grid-2">
           <label>Numero massimo file
@@ -114,6 +228,8 @@
         </div>
         <label class="check"><input type="checkbox" id="rename-topic">
           <span>Rinomina per argomento (max 10 caratteri) invece del nome originale</span></label>
+        <label class="check"><input type="checkbox" id="llm-topic" checked>
+          <span>Argomento suggerito dall'LLM (se disattivo, usa un'euristica sul testo — solo con motore Ibrido/LLM totale)</span></label>
       </fieldset>
 
       <fieldset class="card">

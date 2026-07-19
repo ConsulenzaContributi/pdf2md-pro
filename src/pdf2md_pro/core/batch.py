@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+
+import multiprocessing
 
 class JobControl:
     """Controllo pausa/ripresa/stop di una conversione batch.
@@ -22,9 +23,9 @@ class JobControl:
     completato); lo stop interrompe il lotto dopo il file corrente."""
 
     def __init__(self) -> None:
-        self._running = threading.Event()
+        self._running = multiprocessing.Event()
         self._running.set()  # set = in esecuzione, clear = in pausa
-        self._stop = threading.Event()
+        self._stop = multiprocessing.Event()
 
     def pause(self) -> None:
         self._running.clear()
@@ -57,6 +58,8 @@ from pdf2md_pro.engines.openrouter import (
     ensure_ollama,
     make_llm_engine,
 )
+import json
+import dataclasses
 
 ProgressFn = Callable[[dict], None]
 
@@ -78,6 +81,16 @@ class BatchConfig:
     extract_images: bool = True
     rename_by_topic: bool = False  # default: il md tiene il nome del PDF originale
     llm_topic: bool = True  # con LLM attivo e rinomina per argomento, argomento dal modello
+    
+    # Opzioni avanzate pymupdf4llm / cropbox
+    margins: tuple[float, float, float, float] | None = None  # (left, top, right, bottom)
+    table_strategy: str = "lines_strict"  # lines_strict, lines, none
+    use_ocr: bool = False
+    force_ocr: bool = False
+    dpi: int | None = None
+    ignore_images: bool = False
+    image_size_limit: float | None = None
+    graphics_limit: int | None = None
 
 
 @dataclass
@@ -148,6 +161,14 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
                 extract_images=config.extract_images,
                 llm_engine=job.llm_engine,
                 mode=config.mode,
+                margins=config.margins,
+                table_strategy=config.table_strategy,
+                use_ocr=config.use_ocr,
+                force_ocr=config.force_ocr,
+                dpi=config.dpi,
+                ignore_images=config.ignore_images,
+                image_size_limit=config.image_size_limit,
+                graphics_limit=config.graphics_limit,
             )
             produced.append(_deliver(job, tmp_out, work_pdf.stem))
     return produced
@@ -157,6 +178,7 @@ def run_batch(
     config: BatchConfig,
     progress: ProgressFn = lambda e: None,
     control: JobControl | None = None,
+    completed_files: set[str] | None = None,
 ) -> dict:
     source = Path(config.source_dir)
     if not source.is_dir():
@@ -177,9 +199,34 @@ def run_batch(
     if config.only_files is not None:
         wanted = set(config.only_files)
         pdfs = [p for p in pdfs if p.name in wanted]
+
+    original_total = len(pdfs)
+    completed_names = set(completed_files) if completed_files else set()
+    if completed_names:
+        pdfs = [p for p in pdfs if p.name not in completed_names]
+
     pdfs = pdfs[: config.max_files]
     job = _Job(config=config, progress=progress, llm_engine=llm_engine)
     _emit(job, status="batch_start", total=len(pdfs))
+    
+    resume_file = Path.home() / ".pdf2md" / "resume.json"
+    
+    def save_resume():
+        try:
+            resume_data = {
+                "config": dataclasses.asdict(config),
+                "original_total": original_total,
+                "completed_files": list(completed_names)
+            }
+            # Convert Path objects to strings for JSON serialization
+            resume_data["config"]["source_dir"] = str(resume_data["config"]["source_dir"])
+            resume_data["config"]["dest_dir"] = str(resume_data["config"]["dest_dir"])
+            # la chiave API non tocca mai il disco: alla ripresa la GUI la reinserisce
+            resume_data["config"]["api_key"] = None
+            resume_file.parent.mkdir(parents=True, exist_ok=True)
+            resume_file.write_text(json.dumps(resume_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
 
     stopped = False
     for index, pdf in enumerate(pdfs, start=1):
@@ -208,6 +255,9 @@ def run_batch(
         except Exception as exc:
             job.errors.append(f"{pdf.name}: {exc}")
             _emit(job, status="error", file=pdf.name, index=index, error=str(exc))
+        else:
+            completed_names.add(pdf.name)
+            save_resume()
 
     summary = {
         "converted": len(job.outputs),
@@ -216,5 +266,13 @@ def run_batch(
         "total_files": len(pdfs),
         "stopped": stopped,
     }
+    
+    if not stopped:
+        try:
+            if resume_file.exists():
+                resume_file.unlink()
+        except Exception:
+            pass
+
     _emit(job, status="batch_done", **summary)
     return summary
