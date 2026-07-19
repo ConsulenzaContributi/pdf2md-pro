@@ -1,17 +1,21 @@
 """Motore LLM su API chat OpenAI-compatibili: pagina come immagine → Markdown.
 
-Due provider:
+Tre provider:
 - ``glmocr``: GLM-OCR locale servito da Ollama (default, gratuito, offline)
 - ``openrouter``: modelli cloud via chiave API OpenRouter
+- ``gemini``: modelli Google diretti via l'endpoint OpenAI-compatibile di
+  Gemini, con più chiavi API in rotazione automatica sull'esaurimento quota
+  (le chiavi gratuite hanno limiti bassi: la rotazione allunga l'autonomia)
 
 Pensato per contenuti tecnico-accademici: tabelle GFM, formule LaTeX,
-descrizioni delle figure. La chiave API resta in memoria, mai su disco.
+descrizioni delle figure. Le chiavi API restano in memoria, mai su disco.
 """
 
 from __future__ import annotations
 
 import base64
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -25,6 +29,8 @@ from pdf2md_pro.engines.base import PageResult
 
 DEFAULT_MODEL = "z-ai/glm-4.5v"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 OLLAMA_DEFAULT_MODEL = "glm-ocr:latest"
 RENDER_DPI = 150
@@ -55,24 +61,43 @@ Document excerpt:
 FAILED_PAGE_TEMPLATE = "> ⚠️ Pagina {page} non convertita (LLM): {error}\n"
 
 
+def parse_api_keys(raw: str | list[str] | None) -> list[str]:
+    """Una o più chiavi API da un campo unico: una per riga (o separate da
+    virgola), righe vuote ignorate. Usato per la rotazione multi-chiave."""
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [k.strip() for k in raw if k and k.strip()]
+    return [k.strip() for k in re.split(r"[\n,]+", raw) if k.strip()]
+
+
 class OpenRouterEngine:
-    """Client chat-vision OpenAI-compatibile (OpenRouter, Ollama, ...)."""
+    """Client chat-vision OpenAI-compatibile (OpenRouter, Ollama, Gemini, ...).
+
+    `api_key` accetta anche più chiavi (una per riga/virgola): su errore di
+    quota/rate-limit `_chat` ruota automaticamente alla chiave successiva
+    prima di arrendersi, utile coi piani gratuiti a basso limite."""
 
     def __init__(
         self,
-        api_key: str | None,
+        api_key: str | list[str] | None,
         model: str = DEFAULT_MODEL,
         timeout: float = 300.0,
         api_url: str = API_URL,
         provider: str = "openrouter",
     ) -> None:
-        if provider == "openrouter" and not api_key:
-            raise ValueError("chiave API OpenRouter mancante")
-        self._api_key = api_key
+        if provider in ("openrouter", "gemini") and not api_key:
+            raise ValueError(f"chiave API {provider} mancante")
+        self._api_keys = parse_api_keys(api_key)
+        self._key_index = 0
         self.model = model
         self.timeout = timeout
         self.api_url = api_url
         self.provider = provider
+
+    @property
+    def _api_key(self) -> str | None:
+        return self._api_keys[self._key_index] if self._api_keys else None
 
     @property
     def name(self) -> str:
@@ -162,23 +187,32 @@ class OpenRouterEngine:
             "messages": [{"role": "user", "content": content}],
             "max_tokens": max_tokens,
         }
-        headers = {"Content-Type": "application/json"}
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
-        request = urllib.request.Request(
-            self.api_url,
-            data=json.dumps(payload).encode(),
-            headers=headers,
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=timeout or self.timeout) as response:
-                data = json.loads(response.read().decode())
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"API {exc.code}: {_error_detail(exc)}") from exc
-        if "choices" not in data:
-            raise RuntimeError(f"risposta API senza contenuto: {_api_message(data)}")
-        return data["choices"][0]["message"]["content"]
+        attempts = max(len(self._api_keys), 1)
+        last_error: Exception | None = None
+        for _ in range(attempts):
+            headers = {"Content-Type": "application/json"}
+            if self._api_key:
+                headers["Authorization"] = f"Bearer {self._api_key}"
+            request = urllib.request.Request(
+                self.api_url,
+                data=json.dumps(payload).encode(),
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=timeout or self.timeout) as response:
+                    data = json.loads(response.read().decode())
+                if "choices" not in data:
+                    raise RuntimeError(f"risposta API senza contenuto: {_api_message(data)}")
+                return data["choices"][0]["message"]["content"]
+            except urllib.error.HTTPError as exc:
+                message, quota = _error_detail(exc)
+                last_error = RuntimeError(f"API {exc.code}: {message}")
+                if quota and len(self._api_keys) > 1:
+                    self._key_index = (self._key_index + 1) % len(self._api_keys)
+                    continue
+                raise last_error from exc
+        raise last_error
 
 
 def _api_message(data: dict) -> str:
@@ -189,11 +223,20 @@ def _api_message(data: dict) -> str:
     return str(error or data)[:200]
 
 
-def _error_detail(exc: urllib.error.HTTPError) -> str:
+_QUOTA_KEYWORDS = ("quota", "rate limit", "resource_exhausted", "too many requests")
+
+
+def _error_detail(exc: urllib.error.HTTPError) -> tuple[str, bool]:
+    """Messaggio leggibile + se l'errore è di quota/rate-limit (candidato
+    alla rotazione di chiave, non a un fallimento definitivo)."""
     try:
-        return _api_message(json.loads(exc.read().decode()))
+        message = _api_message(json.loads(exc.read().decode()))
     except Exception:
-        return str(exc.reason)
+        message = str(exc.reason)
+    is_quota = exc.code == 429 or (
+        exc.code == 403 and any(k in message.lower() for k in _QUOTA_KEYWORDS)
+    )
+    return message, is_quota
 
 
 def check_ollama_health(url: str = DEFAULT_OLLAMA_URL, model: str | None = None, timeout: float = 3.0) -> dict:
@@ -229,11 +272,12 @@ def ensure_ollama(url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> None:
 
 def make_llm_engine(
     provider: str,
-    api_key: str | None = None,
+    api_key: str | list[str] | None = None,
     model: str | None = None,
     ollama_url: str = DEFAULT_OLLAMA_URL,
 ) -> OpenRouterEngine:
-    """`glmocr` → GLM-OCR locale via Ollama; `openrouter` → cloud con chiave."""
+    """`glmocr` → GLM-OCR locale via Ollama; `openrouter` → cloud con chiave;
+    `gemini` → Google diretto, `api_key` può contenere più chiavi in rotazione."""
     if provider == "glmocr":
         return OpenRouterEngine(
             api_key=None,
@@ -243,4 +287,9 @@ def make_llm_engine(
         )
     if provider == "openrouter":
         return OpenRouterEngine(api_key=api_key, model=model or DEFAULT_MODEL)
+    if provider == "gemini":
+        return OpenRouterEngine(
+            api_key=api_key, model=model or GEMINI_DEFAULT_MODEL,
+            api_url=GEMINI_API_URL, provider="gemini",
+        )
     raise ValueError(f"provider LLM sconosciuto: {provider}")

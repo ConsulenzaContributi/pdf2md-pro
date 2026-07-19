@@ -65,13 +65,15 @@
             <span><strong>LLM totale</strong><small>Ogni pagina trascritta da <b>GLM-OCR</b> (o OpenRouter). Massima qualità, più lento.</small></span></label>
         </div>
         <p class="note" id="engine-hint">Il modello <b>GLM-OCR</b> si usa in <b>Ibrido</b> e <b>LLM totale</b>.
-          Scegli sotto quale motore LLM: GLM-OCR locale (default) o OpenRouter.</p>
+          Scegli sotto quale motore LLM: GLM-OCR locale (default), OpenRouter o Gemini diretto.</p>
         <div id="llm-fields" class="stack" hidden>
           <div class="radio-row" role="radiogroup" aria-label="Provider LLM">
             <label class="radio"><input type="radio" name="provider" value="glmocr" checked>
               <span><strong>GLM-OCR locale</strong><small>via Ollama — gratuito, tutto offline (default)</small></span></label>
             <label class="radio"><input type="radio" name="provider" value="openrouter">
               <span><strong>OpenRouter API</strong><small>modelli cloud tramite chiave API</small></span></label>
+            <label class="radio"><input type="radio" name="provider" value="gemini">
+              <span><strong>Gemini diretto</strong><small>Google, senza intermediari — più chiavi in rotazione automatica</small></span></label>
           </div>
           <div id="glmocr-fields">
             <label>Modello locale (Ollama)
@@ -92,15 +94,36 @@
               <input type="text" id="model" list="models" value="z-ai/glm-4.5v">
               <datalist id="models">
                 <option value="z-ai/glm-4.5v"></option>
-                <option value="nvidia/nemotron-3-ultra-550b-a55b:free"></option>
                 <option value="google/gemini-2.5-flash"></option>
                 <option value="anthropic/claude-sonnet-4.5"></option>
                 <option value="qwen/qwen2.5-vl-72b-instruct"></option>
               </datalist>
             </label>
           </div>
+          <div id="gemini-fields" hidden>
+            <label>Chiavi API Gemini
+              <textarea id="gemini-api-key" class="mono" rows="3" autocomplete="off"
+                        placeholder="AIza… (una per riga: se una esaurisce la quota gratuita, si passa automaticamente alla successiva)"></textarea>
+            </label>
+            <label class="check"><input type="checkbox" id="remember-gemini-key">
+              <span>Ricorda le chiavi su questo computer</span></label>
+            <label>Modello
+              <input type="text" id="gemini-model" list="gemini-models" value="gemini-2.5-flash">
+              <datalist id="gemini-models">
+                <option value="gemini-3.5-flash"></option>
+                <option value="gemini-2.5-flash"></option>
+                <option value="gemini-2.5-pro"></option>
+                <option value="gemini-2.0-flash"></option>
+              </datalist>
+            </label>
+            <span class="note" style="display:block; font-size:0.85em;">
+              Chiave gratuita su <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+              I piani gratuiti hanno pochi token/minuto: incolla più chiavi (account diversi), una per riga —
+              quando una esaurisce la quota, la conversione passa da sola alla successiva senza fermarsi.
+            </span>
+          </div>
         </div>
-        
+
         <details class="advanced-options" style="margin-top: 1rem; padding: 0.8rem; background: var(--bg-inset); border: 1px solid var(--line); border-radius: var(--radius);">
           <summary style="cursor: pointer; font-weight: 600; color: var(--accent);">Configurazioni Avanzate di Estrazione</summary>
           <div class="stack" style="margin-top: 1rem;">
@@ -300,10 +323,11 @@
       <h2 class="section-title">03 · Second Brain</h2>
       <fieldset class="card">
         <legend>Verifica ottimizzazione</legend>
-        <label>File Markdown da verificare
+        <label>File .md o cartella di fonti da verificare
           <span class="browse-row">
-            <input type="text" id="brain-file" class="mono" placeholder="/percorso/documento.md">
-            <button type="button" class="browse" data-pick="md" data-target="brain-file">Sfoglia…</button>
+            <input type="text" id="brain-file" class="mono" placeholder="/percorso/documento.md  oppure  /percorso/cartella">
+            <button type="button" class="browse" data-pick="md" data-target="brain-file">File…</button>
+            <button type="button" class="browse" data-pick="folder" data-target="brain-file">Cartella…</button>
           </span>
         </label>
         <button id="brain-check-btn" class="secondary">Verifica se è ottimizzato</button>
@@ -334,6 +358,13 @@
             <p style="margin-top: 0.5rem;">La provenienza (<code>.provenance.json</code>)
             resta valida anche dopo l'ottimizzazione: ogni blocco continua a puntare
             alla pagina del PDF di origine.</p>
+            <p style="margin-top: 0.5rem;"><strong>Catalogo della cartella (pattern LLM Wiki):</strong>
+            ogni conversione batch mantiene anche <code>index.md</code> (una riga per fonte,
+            con link e sommario) e <code>log.md</code> (registro cronologico append-only delle
+            estrazioni). I file ottimizzati includono un seme di wikilink
+            (<code>[[argomento]]</code>) per il graph di Obsidian. La verifica su una
+            <em>cartella</em> controlla anche: fonti orfane non presenti nell'indice e
+            titoli duplicati.</p>
           </div>
         </details>
       </fieldset>

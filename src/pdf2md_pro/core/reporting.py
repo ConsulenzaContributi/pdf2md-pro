@@ -1,13 +1,22 @@
 """Sintesi leggibili: footer di attribuzione dentro ogni file, report unico
-aggregato di un'intera procedura di estrazione batch."""
+di batch, catalogo `index.md` e registro cumulativo `log.md` della cartella
+di destinazione (pattern LLM Wiki: le fonti si catalogano da sole)."""
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
+from pathlib import Path
 
 from pdf2md_pro import __version__
 
 REPO_URL = "https://github.com/ConsulenzaContributi/pdf2md-pro"
+INDEX_NAME = "index.md"
+LOG_NAME = "log.md"
+SUMMARY_MAX_CHARS = 120
+
+_INDEX_ENTRY = re.compile(r"^- \[(.+?)\]\((.+?)\) — (.*)$")
+_FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
 
 def format_duration(seconds: float) -> str:
@@ -61,6 +70,66 @@ def build_footer(engine_label: str, duration_s: float, config_summary: str, seco
         f"*Motore: {engine_label} · Tempo di elaborazione: {format_duration(duration_s)} "
         f"· Configurazione: {config_summary}*\n"
     )
+
+
+def extract_summary(markdown: str) -> str:
+    """Prima riga di contenuto vero del md: niente frontmatter, heading,
+    separatori o righe di attribution. Per il catalogo index.md."""
+    body = _FRONTMATTER_RE.sub("", markdown)
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "---", "*Estratto con", "|", "!")):
+            continue
+        return stripped[:SUMMARY_MAX_CHARS] + ("…" if len(stripped) > SUMMARY_MAX_CHARS else "")
+    return ""
+
+
+def update_index(dest_dir: Path, entries: list[dict]) -> None:
+    """Crea/aggiorna `index.md`: una riga per fonte convertita, con link e
+    sommario. Le voci esistenti di altri file restano; quelle riconvertite
+    vengono sovrascritte. Ordine alfabetico, grep-friendly."""
+    index_path = Path(dest_dir) / INDEX_NAME
+    existing: dict[str, str] = {}
+    if index_path.exists():
+        for line in index_path.read_text(encoding="utf-8").splitlines():
+            m = _INDEX_ENTRY.match(line)
+            if m:
+                existing[m.group(2)] = line
+    for e in entries:
+        title = e["output"].removesuffix(".md")
+        summary = e.get("summary") or ""
+        existing[e["output"]] = f"- [{title}]({e['output']}) — {summary}"
+    lines = [
+        "# Indice delle fonti",
+        "",
+        f"Catalogo generato da pdf2md-pro v{__version__}: una riga per documento",
+        "convertito, pronto a fare da fonte per un second brain / LLM wiki.",
+        "",
+        *sorted(existing.values(), key=str.lower),
+        "",
+    ]
+    index_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def append_log(dest_dir: Path, entries: list[dict]) -> None:
+    """Registro cumulativo `log.md`, append-only: una riga per estrazione con
+    timestamp, motore, pagine, tempo ed esito. Parsabile con grep."""
+    log_path = Path(dest_dir) / LOG_NAME
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = []
+    if not log_path.exists():
+        lines += ["# Log delle estrazioni", "",
+                  "Registro append-only di ogni conversione (pdf2md-pro).", ""]
+    for e in entries:
+        if e.get("error"):
+            lines.append(f"- {now} · {e['source']} · ✘ errore: {e['error']}")
+        else:
+            lines.append(
+                f"- {now} · {e['source']} → {e.get('output')} · {e.get('engine')} "
+                f"· {e.get('pages')} pag · {format_duration(e.get('duration_s', 0))} · ✔"
+            )
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
 def build_batch_report(

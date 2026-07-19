@@ -291,19 +291,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": str(exc)})
             return
 
-        if self.path == "/api/brain-check":  # sincrono: sola lettura del file
-            from pdf2md_pro.core.brain import check_markdown
+        if self.path == "/api/brain-check":  # sincrono: sola lettura
+            from pdf2md_pro.core.brain import check_folder, check_markdown
             target = _clean_path(payload.get("path", ""))
-            if target.suffix.lower() != ".md":
-                self._send_json(400, {"error": "serve un file .md"})
-                return
-            if not target.is_file():
-                self._send_json(400, {"error": f"file non trovato: {target}"})
-                return
             try:
-                report = check_markdown(target.read_text(encoding="utf-8"))
-                report["file"] = target.name
-                self._send_json(200, report)
+                if target.is_dir():
+                    self._send_json(200, check_folder(target))
+                elif target.suffix.lower() == ".md" and target.is_file():
+                    report = check_markdown(target.read_text(encoding="utf-8"))
+                    report["file"] = target.name
+                    self._send_json(200, report)
+                else:
+                    self._send_json(400, {"error": f"serve un file .md o una cartella: {target}"})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
             return

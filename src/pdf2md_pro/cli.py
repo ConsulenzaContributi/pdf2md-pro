@@ -80,7 +80,7 @@ def _cmd_batch(args) -> int:
         max_files=args.max_files,
         mode=args.mode,
         provider=args.provider,
-        api_key=os.environ.get("OPENROUTER_API_KEY"),
+        api_key=args.api_key or os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GEMINI_API_KEY"),
         model=args.model,
         ollama_url=args.ollama_url,
         auto_split=args.auto_split,
@@ -161,10 +161,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_batch.add_argument("--max-files", type=int)
     p_batch.add_argument("--mode", choices=["native", "hybrid", "llm"], default="native")
     p_batch.add_argument(
-        "--provider", choices=["glmocr", "openrouter"], default="glmocr",
-        help="glmocr = GLM-OCR locale via Ollama (default); openrouter = cloud",
+        "--provider", choices=["glmocr", "openrouter", "gemini"], default="glmocr",
+        help="glmocr = GLM-OCR locale via Ollama (default); openrouter = cloud; "
+             "gemini = Google diretto (--api-key accetta più chiavi separate da virgola)",
     )
-    p_batch.add_argument("--model", default=None, help="default: glm-ocr:latest (locale) o z-ai/glm-4.5v (OpenRouter)")
+    p_batch.add_argument("--model", default=None,
+                         help="default: glm-ocr:latest (locale), z-ai/glm-4.5v (OpenRouter) o gemini-2.5-flash (Gemini)")
+    p_batch.add_argument("--api-key", default=None,
+                         help="chiave API OpenRouter/Gemini; più chiavi Gemini separate da virgola per la rotazione")
     p_batch.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     p_batch.add_argument("--auto-split", action="store_true")
     p_batch.add_argument("--split-pages", type=int, default=100)

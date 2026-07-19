@@ -53,7 +53,13 @@ class JobControl:
 
 from pdf2md_pro.core.naming import derive_topic, unique_path
 from pdf2md_pro.core.pipeline import ConversionError, convert
-from pdf2md_pro.core.reporting import build_batch_report, build_config_summary
+from pdf2md_pro.core.reporting import (
+    append_log,
+    build_batch_report,
+    build_config_summary,
+    extract_summary,
+    update_index,
+)
 from pdf2md_pro.core.splitter import list_pdfs, needs_split, split_pdf
 from pdf2md_pro.engines.openrouter import (
     DEFAULT_OLLAMA_URL,
@@ -74,8 +80,8 @@ class BatchConfig:
     only_files: list[str] | None = None  # None = tutti; altrimenti solo questi nomi
     max_files: int | None = None
     mode: str = "native"  # native | hybrid | llm
-    provider: str = "glmocr"  # glmocr (locale via Ollama) | openrouter
-    api_key: str | None = None
+    provider: str = "glmocr"  # glmocr (locale via Ollama) | openrouter | gemini
+    api_key: str | None = None  # openrouter/gemini; gemini accetta più chiavi separate da riga/virgola
     model: str | None = None  # None → default del provider
     ollama_url: str = DEFAULT_OLLAMA_URL
     auto_split: bool = False
@@ -182,12 +188,19 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
             )
             output_name = _deliver(job, tmp_out, work_pdf.stem)
             produced.append(output_name)
+            try:
+                summary = extract_summary(
+                    (config.dest_dir / output_name).read_text(encoding="utf-8")
+                )
+            except Exception:
+                summary = ""
             job.reports.append({
                 "source": work_pdf.name,
                 "output": output_name,
                 "pages": result.pages,
                 "engine": result.engine,
                 "duration_s": result.duration_s,
+                "summary": summary,
             })
     return produced
 
@@ -297,6 +310,15 @@ def run_batch(
             (config.dest_dir / report_name).write_text(report_text, encoding="utf-8")
         except Exception:
             report_name = None  # il report è un bonus: non deve far fallire il batch
+        # catalogo e registro della cartella (pattern LLM Wiki): mai bloccanti
+        try:
+            update_index(config.dest_dir, [e for e in job.reports if not e.get("error")])
+        except Exception:
+            pass
+        try:
+            append_log(config.dest_dir, job.reports)
+        except Exception:
+            pass
 
     summary = {
         "converted": len(job.outputs),

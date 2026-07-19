@@ -22,8 +22,12 @@ def _make_pdf(path, title, pages=1):
 
 
 def _output_mds(dest):
-    """I .md prodotti dalla conversione, esclude il report unico di batch."""
-    return sorted(p.name for p in dest.glob("*.md") if not p.name.startswith("pdf2md-report_"))
+    """I .md prodotti dalla conversione: esclude report, index e log di servizio."""
+    service = {"index.md", "log.md"}
+    return sorted(
+        p.name for p in dest.glob("*.md")
+        if not p.name.startswith("pdf2md-report_") and p.name not in service
+    )
 
 
 @pytest.fixture
@@ -178,6 +182,33 @@ def test_batch_genera_report_unico(folders):
     assert "File processati: 2" in text
     assert "Convertiti con successo: 2" in text
     assert "Errori: 0" in text
+
+
+def test_batch_genera_index_e_log(folders):
+    src, dest = folders
+    run_batch(BatchConfig(source_dir=src, dest_dir=dest, extract_images=False))
+
+    index_text = (dest / "index.md").read_text(encoding="utf-8")
+    assert "[a](a.md)" in index_text
+    assert "[b](b.md)" in index_text
+
+    log_text = (dest / "log.md").read_text(encoding="utf-8")
+    assert "a.pdf → a.md" in log_text
+    assert "· ✔" in log_text
+
+
+def test_batch_log_appende_e_index_aggiorna(folders):
+    src, dest = folders
+    run_batch(BatchConfig(source_dir=src, dest_dir=dest, extract_images=False))
+    run_batch(BatchConfig(source_dir=src, dest_dir=dest, extract_images=False, only_files=["a.pdf"]))
+
+    # log: append-only → a.pdf compare due volte
+    log_text = (dest / "log.md").read_text(encoding="utf-8")
+    assert log_text.count("a.pdf") == 2
+    # index: aggiornato, non duplicato → una sola voce per file
+    index_text = (dest / "index.md").read_text(encoding="utf-8")
+    assert index_text.count("(a.md)") == 1
+    assert index_text.count("(b.md)") == 1
 
 
 def test_batch_report_elenca_anche_i_file_falliti(folders):

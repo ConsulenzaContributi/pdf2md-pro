@@ -4,7 +4,13 @@ import pymupdf
 import pytest
 
 from pdf2md_pro.core.pipeline import convert
-from pdf2md_pro.engines.openrouter import OpenRouterEngine, check_ollama_health
+from pdf2md_pro.engines.openrouter import (
+    GEMINI_API_URL,
+    OpenRouterEngine,
+    check_ollama_health,
+    make_llm_engine,
+    parse_api_keys,
+)
 
 
 @pytest.fixture
@@ -196,3 +202,82 @@ def test_check_ollama_health_raggiungibile(monkeypatch):
     assert report["reachable"] is True
     assert report["model_loaded"] is True
     assert "glm-ocr:latest" in report["models"]
+
+
+def test_parse_api_keys_multilinea_e_virgola():
+    assert parse_api_keys("key1\nkey2\n\nkey3") == ["key1", "key2", "key3"]
+    assert parse_api_keys("key1, key2 ,key3") == ["key1", "key2", "key3"]
+    assert parse_api_keys("") == []
+    assert parse_api_keys(None) == []
+    assert parse_api_keys(["a", "", " b "]) == ["a", "b"]
+
+
+def test_gemini_factory_usa_endpoint_e_modello_corretti():
+    eng = make_llm_engine("gemini", api_key="k1\nk2", model=None)
+    assert eng.api_url == GEMINI_API_URL
+    assert eng.model == "gemini-2.5-flash"
+    assert eng.name == "gemini:gemini-2.5-flash"
+
+
+def test_gemini_richiede_almeno_una_chiave():
+    with pytest.raises(ValueError):
+        make_llm_engine("gemini", api_key=None)
+
+
+def test_chat_ruota_chiave_su_quota_esaurita(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    eng = OpenRouterEngine(api_key="key-scaduta\nkey-buona", model="gemini-2.5-flash",
+                            api_url=GEMINI_API_URL, provider="gemini")
+    seen_keys = []
+
+    class FakeQuotaError(urllib.error.HTTPError):
+        def __init__(self):
+            super().__init__(GEMINI_API_URL, 429, "Too Many Requests", {}, None)
+        def read(self):
+            return b'{"error": {"message": "Quota exceeded for this API key"}}'
+
+    class FakeOkResponse:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self):
+            return b'{"choices": [{"message": {"content": "# ok"}}]}'
+
+    def fake_urlopen(request, timeout=None):
+        key = request.headers.get("Authorization", "").removeprefix("Bearer ")
+        seen_keys.append(key)
+        if key == "key-scaduta":
+            raise FakeQuotaError()
+        return FakeOkResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    result = eng._chat([{"type": "text", "text": "ciao"}])
+
+    assert result == "# ok"
+    assert seen_keys == ["key-scaduta", "key-buona"]
+
+
+def test_chat_non_ruota_su_errore_non_di_quota(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    eng = OpenRouterEngine(api_key="key1\nkey2", model="gemini-2.5-flash",
+                            api_url=GEMINI_API_URL, provider="gemini")
+    seen_keys = []
+
+    class FakeAuthError(urllib.error.HTTPError):
+        def __init__(self):
+            super().__init__(GEMINI_API_URL, 401, "Unauthorized", {}, None)
+        def read(self):
+            return b'{"error": {"message": "Invalid API key"}}'
+
+    def fake_urlopen(request, timeout=None):
+        seen_keys.append(request.headers.get("Authorization"))
+        raise FakeAuthError()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(RuntimeError, match="401"):
+        eng._chat([{"type": "text", "text": "ciao"}])
+
+    assert len(seen_keys) == 1  # nessuna rotazione: errore di credenziali, non di quota

@@ -127,6 +127,11 @@ def optimize_parts(parts: list[str], title: str) -> list[str]:
     # titolo H1 in testa alla prima pagina; l'attribution la aggiunge pipeline.convert()
     if parts:
         parts[0] = f"# {title}\n\n" + parts[0].lstrip("\n")
+        # seme di wikilink per il graph del second brain (pattern LLM Wiki)
+        # ponytail: un solo [[topic]] euristico; multi-entità quando servirà
+        topic = derive_topic("\n".join(parts))
+        if topic and topic != "doc":
+            parts[-1] = parts[-1].rstrip() + f"\n\n*Argomenti: [[{topic}]]*\n"
     return parts
 
 
@@ -187,3 +192,59 @@ def check_markdown(text: str) -> dict:
     add("attribution", "pdf2md-pro" in body, "Attribution dello strumento presente")
 
     return {"optimized": all(c["ok"] for c in checks), "checks": checks}
+
+
+SERVICE_FILES = {"index.md", "log.md"}  # catalogo/registro: non sono fonti
+
+
+def _is_source_md(path) -> bool:
+    return (
+        path.suffix.lower() == ".md"
+        and path.name not in SERVICE_FILES
+        and not path.name.startswith("pdf2md-report_")
+    )
+
+
+def check_folder(folder) -> dict:
+    """Lint cross-file di una cartella di fonti (pattern LLM Wiki):
+    stato di ottimizzazione per file, orfani non presenti in index.md,
+    titoli H1 duplicati. Ritorna un report aggregato."""
+    from pathlib import Path
+
+    folder = Path(folder)
+    sources = sorted(p for p in folder.iterdir() if p.is_file() and _is_source_md(p))
+    index_path = folder / "index.md"
+    index_text = index_path.read_text(encoding="utf-8") if index_path.exists() else ""
+
+    files = []
+    titles: dict[str, list[str]] = {}
+    for path in sources:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception as exc:
+            files.append({"file": path.name, "error": str(exc)})
+            continue
+        report = check_markdown(text)
+        body = _FRONTMATTER.sub("", text)
+        h1 = next((m.group(2).strip() for m in (_HEADING.match(l) for l in body.splitlines())
+                   if m and len(m.group(1)) == 1), "")
+        if h1:
+            titles.setdefault(h1, []).append(path.name)
+        files.append({
+            "file": path.name,
+            "optimized": report["optimized"],
+            "in_index": f"({path.name})" in index_text,
+            "issues": [c["label"] for c in report["checks"] if not c["ok"]],
+        })
+
+    orphans = [f["file"] for f in files if not f.get("error") and not f["in_index"]]
+    duplicates = {t: names for t, names in titles.items() if len(names) > 1}
+    return {
+        "folder": str(folder),
+        "total": len(files),
+        "optimized_count": sum(1 for f in files if f.get("optimized")),
+        "has_index": index_path.exists(),
+        "orphans": orphans,
+        "duplicate_titles": duplicates,
+        "files": files,
+    }

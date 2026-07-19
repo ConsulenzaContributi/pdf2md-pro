@@ -53,6 +53,7 @@ function syncConditionalFields() {
   const provider = checkedValue("provider");
   $("glmocr-fields").hidden = provider !== "glmocr";
   $("openrouter-fields").hidden = provider !== "openrouter";
+  $("gemini-fields").hidden = provider !== "gemini";
   syncOllamaBadge();
 }
 
@@ -111,12 +112,12 @@ function pollOllamaHealth() {
 // --- Persistenza impostazioni (localStorage, per questo browser locale) ---
 const CONFIG_KEY = "pdf2md-pro:config:v1";
 const TEXT_IDS = [
-  "local-model", "ollama-url", "model", "source-dir", "dest-dir", "max-files",
+  "local-model", "ollama-url", "model", "gemini-model", "source-dir", "dest-dir", "max-files",
   "split-pages", "split-mb", "split-input", "split-interi",
   "tool-max-pages", "tool-max-mb", "adv-margins", "adv-table-strategy", "adv-dpi",
   "adv-image-size-limit", "adv-graphics-limit", "brain-file"
 ];
-const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images", "brain-optimize"];
+const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "remember-gemini-key", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images", "brain-optimize"];
 const RADIO_NAMES = ["mode", "provider"];
 
 function saveConfig() {
@@ -124,8 +125,9 @@ function saveConfig() {
   TEXT_IDS.forEach((id) => { cfg.text[id] = $(id).value; });
   CHECK_IDS.forEach((id) => { cfg.check[id] = $(id).checked; });
   RADIO_NAMES.forEach((name) => { cfg.radio[name] = checkedValue(name); });
-  // la chiave API è un segreto: salvata solo con consenso esplicito
+  // le chiavi API sono segreti: salvate solo con consenso esplicito
   cfg.text["api-key"] = $("remember-key").checked ? $("api-key").value : "";
+  cfg.text["gemini-api-key"] = $("remember-gemini-key").checked ? $("gemini-api-key").value : "";
   try {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
   } catch { /* storage pieno o disabilitato: si prosegue senza persistenza */ }
@@ -144,12 +146,13 @@ function restoreConfig() {
     if (el) el.checked = true;
   });
   if (!$("remember-key").checked) $("api-key").value = "";
+  if (!$("remember-gemini-key").checked) $("gemini-api-key").value = "";
   syncConditionalFields();
 }
 
 restoreConfig();
 // salva a ogni modifica di qualunque campo del form
-document.querySelectorAll("input, select").forEach((el) => {
+document.querySelectorAll("input, select, textarea").forEach((el) => {
   el.addEventListener("change", saveConfig);
   el.addEventListener("input", saveConfig);
 });
@@ -458,8 +461,10 @@ function buildConvertPayload(sourceDir, onlyFiles = null) {
     max_files: num("max-files"),
     mode,
     provider,
-    api_key: $("api-key").value.trim(),
-    model: provider === "glmocr" ? $("local-model").value.trim() : $("model").value.trim(),
+    api_key: provider === "gemini" ? $("gemini-api-key").value.trim() : $("api-key").value.trim(),
+    model: provider === "glmocr" ? $("local-model").value.trim()
+      : provider === "gemini" ? $("gemini-model").value.trim()
+      : $("model").value.trim(),
     ollama_url: $("ollama-url").value.trim(),
     auto_split: $("auto-split").checked,
     split_pages: num("split-pages"),
@@ -485,8 +490,8 @@ function submitConvert(payload) {
     addLog("Indicare cartella sorgente e destinazione.", "err");
     return;
   }
-  if (payload.mode !== "native" && payload.provider === "openrouter" && !payload.api_key) {
-    addLog("Provider OpenRouter: serve la chiave API.", "err");
+  if (payload.mode !== "native" && (payload.provider === "openrouter" || payload.provider === "gemini") && !payload.api_key) {
+    addLog(`Provider ${payload.provider === "gemini" ? "Gemini" : "OpenRouter"}: serve almeno una chiave API.`, "err");
     return;
   }
   beginJob();
@@ -629,21 +634,46 @@ $("brain-check-btn").addEventListener("click", async () => {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.statusText);
     report.replaceChildren();
-    const verdict = document.createElement("div");
-    verdict.style.cssText = "font-weight:700;margin-bottom:0.5rem;";
-    verdict.style.color = d.optimized ? "var(--ok, #3c9)" : "var(--err)";
-    verdict.textContent = d.optimized
-      ? `✅ ${d.file}: già ottimizzato per il second brain`
-      : `⚠️ ${d.file}: da ottimizzare (riconvertilo con l'opzione 🧠 attiva)`;
-    report.appendChild(verdict);
-    d.checks.forEach((c) => {
+    const addRow = (text, isErr, bold) => {
       const row = document.createElement("div");
       row.className = "note";
-      row.style.cssText = "font-size:0.85em;margin:0.15rem 0;";
-      row.textContent = `${c.ok ? "✔" : "✘"} ${c.label}${!c.ok && c.detail ? " — " + c.detail : ""}`;
-      row.style.color = c.ok ? "" : "var(--err)";
+      row.style.cssText = `font-size:0.85em;margin:0.15rem 0;${bold ? "font-weight:700;" : ""}`;
+      row.textContent = text;
+      if (isErr) row.style.color = "var(--err)";
       report.appendChild(row);
-    });
+    };
+    if (d.files) {
+      // report aggregato di cartella (lint cross-file)
+      const allOk = d.optimized_count === d.total && d.orphans.length === 0
+        && Object.keys(d.duplicate_titles).length === 0;
+      const verdict = document.createElement("div");
+      verdict.style.cssText = "font-weight:700;margin-bottom:0.5rem;";
+      verdict.style.color = allOk ? "var(--ok, #3c9)" : "var(--err)";
+      verdict.textContent = allOk
+        ? `✅ Cartella in ordine: ${d.optimized_count}/${d.total} fonti ottimizzate, indice completo`
+        : `⚠️ Cartella da sistemare: ${d.optimized_count}/${d.total} fonti ottimizzate`;
+      report.appendChild(verdict);
+      if (!d.has_index) addRow("✘ index.md assente (viene creato dalla prossima conversione batch)", true);
+      d.orphans.forEach((f) => addRow(`✘ ${f}: non presente in index.md (orfano)`, true));
+      Object.entries(d.duplicate_titles).forEach(([t, names]) =>
+        addRow(`✘ Titolo duplicato "${t}": ${names.join(", ")}`, true));
+      d.files.forEach((f) => {
+        if (f.error) { addRow(`✘ ${f.file}: ${f.error}`, true); return; }
+        if (f.optimized) addRow(`✔ ${f.file}`);
+        else addRow(`✘ ${f.file}: ${f.issues.join("; ")}`, true);
+      });
+    } else {
+      const verdict = document.createElement("div");
+      verdict.style.cssText = "font-weight:700;margin-bottom:0.5rem;";
+      verdict.style.color = d.optimized ? "var(--ok, #3c9)" : "var(--err)";
+      verdict.textContent = d.optimized
+        ? `✅ ${d.file}: già ottimizzato per il second brain`
+        : `⚠️ ${d.file}: da ottimizzare (riconvertilo con l'opzione 🧠 attiva)`;
+      report.appendChild(verdict);
+      d.checks.forEach((c) => {
+        addRow(`${c.ok ? "✔" : "✘"} ${c.label}${!c.ok && c.detail ? " — " + c.detail : ""}`, !c.ok);
+      });
+    }
     report.hidden = false;
   } catch (e) {
     addLog("Verifica second brain: " + fetchErrorText(e), "err");

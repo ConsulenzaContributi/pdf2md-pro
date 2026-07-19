@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.25.0 — 2026-07-19
+### ✨ Novità
+- Aggiunto `gemini-3.5-flash` tra i modelli Gemini selezionabili in GUI
+
+## v0.24.0 — 2026-07-19
+### ✨ Novità
+- Aggiunto Gemini come provider LLM diretto (senza passare da OpenRouter), con supporto a più chiavi API: quando una esaurisce la quota gratuita, la conversione passa automaticamente alla successiva senza fermarsi
+- CLI: `--provider gemini` e `--api-key` (più chiavi separate da virgola)
+### 🐛 Correzioni
+- Rimosso dall'elenco dei modelli OpenRouter `nemotron-3-ultra` — verificato che non supporta le immagini ed era quindi inutilizzabile per l'estrazione OCR
+
+## v0.23.0 — 2026-07-19
+### ✨ Novità
+- Adottato il pattern "LLM Wiki" (Karpathy) per la cartella di destinazione: ogni batch mantiene `index.md` (catalogo delle fonti con link e sommario) e `log.md` (registro cronologico di ogni estrazione, append-only)
+- I file ottimizzati per second brain includono un seme di wikilink `[[argomento]]` per il graph di Obsidian
+- La verifica Second Brain ora accetta anche un'intera cartella: controlla ogni fonte, segnala i file orfani non presenti nell'indice e i titoli duplicati
+
 ## v0.22.0 — 2026-07-19
 ### ✨ Novità
 - Ogni file .md riporta ora, in coda al testo, che è stato estratto con pdf2md-pro, con quale motore, in quanto tempo e con quale configurazione avanzata (in sintesi) — anche gli stessi dati nel frontmatter per una ricerca strutturata

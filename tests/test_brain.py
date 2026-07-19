@@ -92,6 +92,43 @@ def test_check_su_file_ottimizzato_e_non(tmp_path):
     assert brain_report["optimized"] is True, brain_report["checks"]
 
 
+def test_wikilink_seed_nel_file_ottimizzato():
+    out = optimize_parts(["# Bilancio\n\nAnalisi del bilancio aziendale."], "doc-prova")
+    joined = "\n".join(out)
+
+    assert "[[" in joined and "]]" in joined
+    assert "*Argomenti:" in joined
+
+
+def test_check_folder_orfani_e_duplicati(tmp_path):
+    from pdf2md_pro.core.brain import check_folder
+
+    # due fonti con lo stesso H1, nessun index.md
+    (tmp_path / "uno.md").write_text("# Stesso Titolo\n\ntesto uno.", encoding="utf-8")
+    (tmp_path / "due.md").write_text("# Stesso Titolo\n\ntesto due.", encoding="utf-8")
+    (tmp_path / "pdf2md-report_x.md").write_text("# Report", encoding="utf-8")  # ignorato
+
+    report = check_folder(tmp_path)
+
+    assert report["total"] == 2
+    assert report["has_index"] is False
+    assert sorted(report["orphans"]) == ["due.md", "uno.md"]
+    assert report["duplicate_titles"] == {"Stesso Titolo": ["due.md", "uno.md"]}
+
+
+def test_check_folder_index_completo(tmp_path):
+    from pdf2md_pro.core.brain import check_folder
+
+    (tmp_path / "uno.md").write_text("# Uno\n\ntesto.", encoding="utf-8")
+    (tmp_path / "index.md").write_text("# Indice\n\n- [uno](uno.md) — testo.", encoding="utf-8")
+
+    report = check_folder(tmp_path)
+
+    assert report["orphans"] == []
+    assert report["duplicate_titles"] == {}
+    assert report["has_index"] is True
+
+
 def test_provenance_coerente_dopo_ottimizzazione(tmp_path):
     import json
 
