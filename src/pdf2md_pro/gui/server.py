@@ -206,6 +206,49 @@ def _pick_path(kind: str) -> dict:
     return {"path": out.stdout.strip().rstrip("/")}
 
 
+def _read_env() -> dict:
+    env_path = Path(".env")
+    res = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+                res[k.strip()] = v.strip().strip("'\"")
+    return res
+
+
+def _write_env(updates: dict) -> None:
+    env_path = Path(".env")
+    lines = []
+    if env_path.exists():
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    
+    new_lines = []
+    written = set()
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.split("=", 1)[0].strip()
+            if k in updates:
+                if updates[k]:  # solo se non è vuoto
+                    new_lines.append(f"{k}={updates[k]}")
+                written.add(k)
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+            
+    for k, v in updates.items():
+        if k not in written and v:
+            new_lines.append(f"{k}={v}")
+            
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "pdf2md-pro"
 
@@ -267,6 +310,8 @@ class Handler(BaseHTTPRequestHandler):
             url = q.get("url", [DEFAULT_OLLAMA_URL])[0]
             model = q.get("model", [None])[0]
             self._send_json(200, check_ollama_health(url, model))
+        elif parsed.path == "/api/load-env":
+            self._send_json(200, _read_env())
         else:
             self._send_json(404, {"error": "non trovato"})
 
@@ -277,6 +322,25 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
             self._send_json(400, {"error": "JSON non valido"})
+            return
+
+        if self.path == "/api/save-env":
+            try:
+                _write_env(payload)
+                self._send_json(200, {"ok": True})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
+        if self.path == "/api/open-folder":
+            try:
+                folder = payload.get("folder")
+                if folder and Path(folder).is_dir():
+                    import subprocess
+                    subprocess.run(["open", folder], check=False)
+                self._send_json(200, {"ok": True})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
             return
 
         if self.path == "/api/analyze":  # sincrono: sola lettura, veloce
@@ -305,6 +369,18 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json(400, {"error": f"serve un file .md o una cartella: {target}"})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path == "/api/audit":
+            from pdf2md_pro.core.auditor import audit_quality
+            try:
+                pdf_path = _clean_path(payload.get("pdf_path", ""))
+                md_path = _clean_path(payload.get("md_path", ""))
+                res = audit_quality(pdf_path, md_path)
+                status = 400 if "error" in res else 200
+                self._send_json(status, res)
+            except Exception as exc:
+                self._send_json(500, {"error": str(exc)})
             return
 
         if self.path in ("/api/pause", "/api/resume", "/api/stop", "/api/restart"):

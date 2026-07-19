@@ -147,7 +147,7 @@ class OpenRouterEngine:
         last_error: Exception | None = None
         for attempt in range(1, PAGE_RETRIES + 2):  # 1 tentativo + PAGE_RETRIES
             try:
-                markdown = self._chat(content, timeout=PAGE_TIMEOUT)
+                markdown, usage = self._chat(content, timeout=PAGE_TIMEOUT)
                 elapsed = time.monotonic() - start
                 if progress:
                     progress({"status": "page_done", "page": number, "index": index,
@@ -155,6 +155,8 @@ class OpenRouterEngine:
                 return PageResult(
                     page_number=number, markdown=markdown,
                     confidence=LLM_CONFIDENCE, engine=self.name,
+                    tokens_in=usage.get("prompt_tokens", 0),
+                    tokens_out=usage.get("completion_tokens", 0),
                 )
             except Exception as exc:
                 last_error = exc
@@ -176,12 +178,12 @@ class OpenRouterEngine:
     def suggest_topic(self, text: str) -> str:
         content = [{"type": "text", "text": TOPIC_PROMPT + text[:2000]}]
         try:
-            raw = self._chat(content, max_tokens=20)
+            raw, _ = self._chat(content, max_tokens=20)
         except Exception:
             return ""
         return slugify_topic(raw)
 
-    def _chat(self, content: list[dict], max_tokens: int = 4096, timeout: float | None = None) -> str:
+    def _chat(self, content: list[dict], max_tokens: int = 4096, timeout: float | None = None) -> tuple[str, dict]:
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": content}],
@@ -204,7 +206,7 @@ class OpenRouterEngine:
                     data = json.loads(response.read().decode())
                 if "choices" not in data:
                     raise RuntimeError(f"risposta API senza contenuto: {_api_message(data)}")
-                return data["choices"][0]["message"]["content"]
+                return data["choices"][0]["message"]["content"], data.get("usage", {})
             except urllib.error.HTTPError as exc:
                 message, quota = _error_detail(exc)
                 last_error = RuntimeError(f"API {exc.code}: {message}")

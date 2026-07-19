@@ -3,7 +3,9 @@
 ![CI](https://github.com/ConsulenzaContributi/pdf2md-pro/actions/workflows/ci.yml/badge.svg)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-0.19.0-orange)
+![Version](https://img.shields.io/badge/version-0.28.4-orange)
+
+> 🗺️ **Documentazione di Progetto**: Consulta il [Blueprint Interattivo](docs/BLUEPRINT_v0.28.4.html), la [Demo Commerciale](docs/DEMO_v0.28.4.html) o la [Guida Completa](docs/GUIDA_v0.28.4.md) generati con VgdV.
 
 Convertitore PDF → Markdown con routing ibrido per pagina e **provenienza
 totale**: ogni blocco Markdown risale alla pagina del PDF sorgente tramite
@@ -12,7 +14,7 @@ macchina a meno che tu non scelga esplicitamente un provider cloud.
 
 ## ✨ Funzionalità
 
-- **Motore nativo** (PyMuPDF4LLM) per PDF testuali: veloce, gratuito, offline
+- **Motore nativo** per PDF testuali: veloce, gratuito, offline
 - **OCR reale** via Tesseract per pagine scansionate (italiano + inglese)
 - **Motore LLM ibrido**: routing automatico per pagina fra parser nativo e
   vision-LLM su scansioni/pagine complesse

@@ -117,7 +117,7 @@ const TEXT_IDS = [
   "tool-max-pages", "tool-max-mb", "adv-margins", "adv-table-strategy", "adv-dpi",
   "adv-image-size-limit", "adv-graphics-limit", "brain-file"
 ];
-const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "remember-gemini-key", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images", "brain-optimize"];
+const CHECK_IDS = ["extract-images", "auto-split", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images", "brain-optimize"];
 const RADIO_NAMES = ["mode", "provider"];
 
 function saveConfig() {
@@ -125,9 +125,9 @@ function saveConfig() {
   TEXT_IDS.forEach((id) => { cfg.text[id] = $(id).value; });
   CHECK_IDS.forEach((id) => { cfg.check[id] = $(id).checked; });
   RADIO_NAMES.forEach((name) => { cfg.radio[name] = checkedValue(name); });
-  // le chiavi API sono segreti: salvate solo con consenso esplicito
-  cfg.text["api-key"] = $("remember-key").checked ? $("api-key").value : "";
-  cfg.text["gemini-api-key"] = $("remember-gemini-key").checked ? $("gemini-api-key").value : "";
+  // le chiavi API ora vengono salvate in .env, non più in localStorage
+  cfg.text["api-key"] = "";
+  cfg.text["gemini-api-key"] = "";
   try {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
   } catch { /* storage pieno o disabilitato: si prosegue senza persistenza */ }
@@ -145,8 +145,8 @@ function restoreConfig() {
     const el = document.querySelector(`input[name="${name}"][value="${v}"]`);
     if (el) el.checked = true;
   });
-  if (!$("remember-key").checked) $("api-key").value = "";
-  if (!$("remember-gemini-key").checked) $("gemini-api-key").value = "";
+  $("api-key").value = "";
+  $("gemini-api-key").value = "";
   syncConditionalFields();
 }
 
@@ -157,6 +157,48 @@ document.querySelectorAll("input, select, textarea").forEach((el) => {
   el.addEventListener("input", saveConfig);
 });
 [$("ollama-url"), $("local-model")].forEach((el) => el.addEventListener("change", syncOllamaBadge));
+
+// carica configurazione .env all'avvio
+fetch("/api/load-env")
+  .then((r) => r.json())
+  .then((env) => {
+    if (env.OPENROUTER_API_KEY) $("api-key").value = env.OPENROUTER_API_KEY;
+    if (env.OPENROUTER_DEFAULT_MODEL) $("model").value = env.OPENROUTER_DEFAULT_MODEL;
+    if (env.GEMINI_API_KEY) $("gemini-api-key").value = env.GEMINI_API_KEY;
+    if (env.GEMINI_DEFAULT_MODEL) $("gemini-model").value = env.GEMINI_DEFAULT_MODEL;
+  })
+  .catch(() => {});
+
+// Pulsanti Salva in .env
+$("save-openrouter-env-btn").addEventListener("click", () => {
+  const payload = {
+    OPENROUTER_API_KEY: $("api-key").value.trim(),
+    OPENROUTER_DEFAULT_MODEL: $("model").value.trim()
+  };
+  fetch("/api/save-env", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+    .then(r => {
+      if (r.ok) {
+        addLog("Configurazione OpenRouter salvata nel file .env locale.", "ok");
+      } else {
+        addLog("Errore durante il salvataggio in .env", "err");
+      }
+    });
+});
+
+$("save-gemini-env-btn").addEventListener("click", () => {
+  const payload = {
+    GEMINI_API_KEY: $("gemini-api-key").value.trim(),
+    GEMINI_DEFAULT_MODEL: $("gemini-model").value.trim()
+  };
+  fetch("/api/save-env", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+    .then(r => {
+      if (r.ok) {
+        addLog("Configurazione Gemini salvata nel file .env locale.", "ok");
+      } else {
+        addLog("Errore durante il salvataggio in .env", "err");
+      }
+    });
+});
 
 // versione (log SemVer) accanto al titolo
 fetch("/api/version")
@@ -389,7 +431,31 @@ function applyState(state) {
   }
 
   if (!state.running) {
-    if (state.error) addLog("ERRORE: " + state.error, "err");
+    if (state.error) {
+      addLog("ERRORE: " + state.error, "err");
+    } else if (renderedEvents > 0) {
+      const dest = $("dest-dir").value.trim();
+      if (dest) {
+        const line = document.createElement("div");
+        line.className = "log-line stack";
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.style.width = "auto";
+        btn.style.padding = "0.4rem 0.8rem";
+        btn.style.marginTop = "0.5rem";
+        btn.textContent = "📂 Apri cartella nel Finder";
+        btn.onclick = () => {
+          fetch("/api/open-folder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ folder: dest })
+          });
+        };
+        line.appendChild(btn);
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      }
+    }
     stopPolling();
   }
 }
@@ -679,6 +745,50 @@ $("brain-check-btn").addEventListener("click", async () => {
     addLog("Verifica second brain: " + fetchErrorText(e), "err");
   } finally {
     $("brain-check-btn").disabled = false;
+  }
+});
+// --- Quality Audit ---
+$("audit-start-btn").addEventListener("click", async () => {
+  if (offlineBlocked()) return;
+  const pdfPath = $("audit-pdf").value.trim();
+  const mdPath = $("audit-md").value.trim();
+  
+  if (!pdfPath || !mdPath) {
+    addLog("Indicare sia il PDF originale che il Markdown estratto.", "err");
+    return;
+  }
+  
+  $("audit-start-btn").disabled = true;
+  $("audit-results").hidden = true;
+  
+  try {
+    const r = await fetch("/api/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdf_path: pdfPath, md_path: mdPath }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    
+    $("audit-layout-score").textContent = d.layout_score + "%";
+    $("audit-typo-score").textContent = d.typography_score + "%";
+    
+    const fmt = (stats) => `
+      <li>Caratteri: ${stats.characters}</li>
+      <li>Titoli H1/H2/H3: ${stats.h1} / ${stats.h2} / ${stats.h3}</li>
+      <li>Grassetti/Corsivi: ${stats.bold} / ${stats.italic}</li>
+      <li>Immagini: ${stats.images}</li>
+      <li>Tabelle (stimate): ${stats.tables}</li>
+    `;
+    
+    $("audit-pdf-stats").innerHTML = fmt(d.pdf_stats);
+    $("audit-md-stats").innerHTML = fmt(d.md_stats);
+    
+    $("audit-results").hidden = false;
+  } catch (e) {
+    addLog("Errore Quality Audit: " + fetchErrorText(e), "err");
+  } finally {
+    $("audit-start-btn").disabled = false;
   }
 });
 

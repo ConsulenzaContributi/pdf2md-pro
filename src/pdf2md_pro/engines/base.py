@@ -14,3 +14,5 @@ class PageResult:
     images: tuple[str, ...] = ()
     confidence: float = 1.0
     engine: str = "native"
+    tokens_in: int = 0
+    tokens_out: int = 0

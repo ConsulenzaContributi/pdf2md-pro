@@ -58,14 +58,14 @@
         <legend>Motore</legend>
         <div class="radio-row" role="radiogroup" aria-label="Modalità motore">
           <label class="radio"><input type="radio" name="mode" value="native" checked>
-            <span><strong>Nativo</strong><small>solo motore locale PyMuPDF4LLM + OCR Tesseract. Nessun LLM, nessun GLM-OCR. Tutto offline.</small></span></label>
+            <span><strong>Nativo</strong><small>solo motore locale nativo + OCR Tesseract. Nessun LLM, nessun GLM-OCR. Tutto offline.</small></span></label>
           <label class="radio"><input type="radio" name="mode" value="hybrid">
-            <span><strong>Ibrido</strong><small>Nativo sul testo + <b>GLM-OCR</b> (o OpenRouter) solo su scansioni e pagine complesse.</small></span></label>
+            <span><strong>Ibrido</strong><small>Nativo sul testo + <b>LLM selezionato</b> solo su scansioni e pagine complesse.</small></span></label>
           <label class="radio"><input type="radio" name="mode" value="llm">
-            <span><strong>LLM totale</strong><small>Ogni pagina trascritta da <b>GLM-OCR</b> (o OpenRouter). Massima qualità, più lento.</small></span></label>
+            <span><strong>LLM totale</strong><small>Ogni pagina trascritta direttamente dall'<b>LLM selezionato</b>. Massima qualità, più lento.</small></span></label>
         </div>
-        <p class="note" id="engine-hint">Il modello <b>GLM-OCR</b> si usa in <b>Ibrido</b> e <b>LLM totale</b>.
-          Scegli sotto quale motore LLM: GLM-OCR locale (default), OpenRouter o Gemini diretto.</p>
+        <p class="note" id="engine-hint">Il motore <b>LLM</b> si usa nelle modalità <b>Ibrido</b> e <b>LLM totale</b>.
+          Scegli sotto quale provider utilizzare: GLM-OCR locale (default), OpenRouter o Gemini diretto.</p>
         <div id="llm-fields" class="stack" hidden>
           <div class="radio-row" role="radiogroup" aria-label="Provider LLM">
             <label class="radio"><input type="radio" name="provider" value="glmocr" checked>
@@ -88,34 +88,39 @@
               <input type="password" id="api-key" autocomplete="off"
                      placeholder="sk-or-…">
             </label>
-            <label class="check"><input type="checkbox" id="remember-key">
-              <span>Ricorda la chiave su questo computer</span></label>
-            <label>Modello
-              <input type="text" id="model" list="models" value="z-ai/glm-4.5v">
-              <datalist id="models">
-                <option value="z-ai/glm-4.5v"></option>
-                <option value="google/gemini-2.5-flash"></option>
-                <option value="anthropic/claude-sonnet-4.5"></option>
-                <option value="qwen/qwen2.5-vl-72b-instruct"></option>
-              </datalist>
+            <label>Motore predefinito
+              <select id="model">
+                <option value="z-ai/glm-4.5v">z-ai/glm-4.5v (Gratis)</option>
+                <option value="google/gemini-2.5-flash">google/gemini-2.5-flash ($0.075 / $0.30)</option>
+                <option value="anthropic/claude-sonnet-4.5">anthropic/claude-sonnet-4.5 ($3.00 / $15.00)</option>
+                <option value="qwen/qwen2.5-vl-72b-instruct">qwen/qwen2.5-vl-72b-instruct ($0.40 / $0.40)</option>
+                <option value="qwen/qwen3-vl-32b-instruct">qwen/qwen3-vl-32b-instruct ($0.15 / $0.15)</option>
+                <option value="google/gemini-3.1-flash-lite">google/gemini-3.1-flash-lite ($0.075 / $0.30)</option>
+                <option value="z-ai/glm-5.2">z-ai/glm-5.2 (Gratis)</option>
+                <option value="minimax/minimax-m3">minimax/minimax-m3 (Gratis)</option>
+                <option value="google/gemini-3.1-pro-preview">google/gemini-3.1-pro-preview ($1.25 / $5.00)</option>
+              </select>
             </label>
+            <div style="margin-top: 0.5rem; text-align: right;">
+              <button type="button" id="save-openrouter-env-btn" class="secondary" style="font-size: 0.85rem; padding: 0.3rem 0.6rem;">💾 Salva in .env</button>
+            </div>
           </div>
           <div id="gemini-fields" hidden>
             <label>Chiavi API Gemini
               <textarea id="gemini-api-key" class="mono" rows="3" autocomplete="off"
                         placeholder="AIza… (una per riga: se una esaurisce la quota gratuita, si passa automaticamente alla successiva)"></textarea>
             </label>
-            <label class="check"><input type="checkbox" id="remember-gemini-key">
-              <span>Ricorda le chiavi su questo computer</span></label>
-            <label>Modello
-              <input type="text" id="gemini-model" list="gemini-models" value="gemini-2.5-flash">
-              <datalist id="gemini-models">
-                <option value="gemini-3.5-flash"></option>
-                <option value="gemini-2.5-flash"></option>
-                <option value="gemini-2.5-pro"></option>
-                <option value="gemini-2.0-flash"></option>
-              </datalist>
+            <label>Motore predefinito
+              <select id="gemini-model">
+                <option value="gemini-3.5-flash">gemini-3.5-flash ($0.075 / $0.30)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash ($0.075 / $0.30)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro ($1.25 / $5.00)</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash ($0.10 / $0.40)</option>
+              </select>
             </label>
+            <div style="margin-top: 0.5rem; text-align: right;">
+              <button type="button" id="save-gemini-env-btn" class="secondary" style="font-size: 0.85rem; padding: 0.3rem 0.6rem;">💾 Salva in .env</button>
+            </div>
             <span class="note" style="display:block; font-size:0.85em;">
               Chiave gratuita su <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
               I piani gratuiti hanno pochi token/minuto: incolla più chiavi (account diversi), una per riga —
@@ -369,7 +374,53 @@
         </details>
       </fieldset>
 
-      <h2 class="section-title">04 · Registro</h2>
+      <h2 class="section-title">04 · Quality Audit</h2>
+      <fieldset class="card">
+        <legend>Comparazione Tipografica e Visuale</legend>
+        <p class="note" style="margin-bottom: 0.8rem;">Compara un PDF originale con un file Markdown estratto per verificare la fedeltà del layout e della tipografia.</p>
+        <div class="grid-2">
+          <label>PDF Originale
+            <span class="browse-row">
+              <input type="text" id="audit-pdf" class="mono" placeholder="/percorso/originale.pdf">
+              <button type="button" class="browse" data-pick="file" data-target="audit-pdf">Sfoglia…</button>
+            </span>
+          </label>
+          <label>Markdown Estratto
+            <span class="browse-row">
+              <input type="text" id="audit-md" class="mono" placeholder="/percorso/estratto.md">
+              <button type="button" class="browse" data-pick="md" data-target="audit-md">Sfoglia…</button>
+            </span>
+          </label>
+        </div>
+        <button id="audit-start-btn" class="primary" style="margin-top: 1rem;">Esegui Quality Audit</button>
+        
+        <div id="audit-results" hidden style="margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 1rem;">
+          <h3>Risultati Audit</h3>
+          <div class="grid-2" style="margin-top: 0.5rem; text-align: center;">
+            <div style="background: var(--bg-inset); padding: 1rem; border-radius: var(--radius); border: 1px solid var(--line);">
+              <div style="font-size: 0.9rem; color: var(--dim);">Precisione Lunghezza / Testo</div>
+              <div id="audit-layout-score" style="font-size: 2rem; font-weight: bold; color: var(--accent); margin-top: 0.5rem;">0%</div>
+            </div>
+            <div style="background: var(--bg-inset); padding: 1rem; border-radius: var(--radius); border: 1px solid var(--line);">
+              <div style="font-size: 0.9rem; color: var(--dim);">Fedeltà Tipografica (Titoli, Grassetti)</div>
+              <div id="audit-typo-score" style="font-size: 2rem; font-weight: bold; color: var(--accent); margin-top: 0.5rem;">0%</div>
+            </div>
+          </div>
+          
+          <div class="grid-2" style="margin-top: 1rem; font-size: 0.9rem; gap: 2rem;">
+            <div>
+              <strong>Originale (PyMuPDF)</strong>
+              <ul id="audit-pdf-stats" style="margin-top: 0.5rem; padding-left: 1.2rem; color: var(--dim);"></ul>
+            </div>
+            <div>
+              <strong>Estratto (Markdown)</strong>
+              <ul id="audit-md-stats" style="margin-top: 0.5rem; padding-left: 1.2rem; color: var(--dim);"></ul>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <h2 class="section-title">05 · Registro</h2>
       <div id="log" class="log mono" aria-live="polite">
         <div class="log-line dim">In attesa di un job…</div>
       </div>

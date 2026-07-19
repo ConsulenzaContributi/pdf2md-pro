@@ -18,6 +18,31 @@ SUMMARY_MAX_CHARS = 120
 _INDEX_ENTRY = re.compile(r"^- \[(.+?)\]\((.+?)\) — (.*)$")
 _FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
+MODEL_COSTS = {
+    # Cost per 1M tokens (input, output) in USD
+    "qwen/qwen2.5-vl-72b-instruct": (0.40, 0.40),
+    "qwen/qwen3-vl-32b-instruct": (0.15, 0.15),
+    "z-ai/glm-4.5v": (0.0, 0.0), # Assuming free or adjust if known
+    "google/gemini-2.5-flash": (0.075, 0.30),
+    "anthropic/claude-sonnet-4.5": (3.0, 15.0),
+    "google/gemini-3.1-flash-lite": (0.075, 0.30),
+    "z-ai/glm-5.2": (0.0, 0.0),
+    "minimax/minimax-m3": (0.0, 0.0),
+    "google/gemini-3.1-pro-preview": (1.25, 5.0),
+    "gemini-3.5-flash": (0.075, 0.30),
+    "gemini-2.5-flash": (0.075, 0.30),
+    "gemini-2.5-pro": (1.25, 5.0),
+    "gemini-2.0-flash": (0.10, 0.40),
+}
+
+def estimate_cost(engine_str: str, tokens_in: int, tokens_out: int) -> float:
+    # engine_str is usually "provider:model", e.g., "openrouter:qwen/qwen2.5-vl-72b-instruct"
+    model_name = engine_str.split(":", 1)[-1] if ":" in engine_str else engine_str
+    if model_name in MODEL_COSTS:
+        cost_in, cost_out = MODEL_COSTS[model_name]
+        return (tokens_in / 1_000_000 * cost_in) + (tokens_out / 1_000_000 * cost_out)
+    return 0.0
+
 
 def format_duration(seconds: float) -> str:
     seconds = max(seconds, 0)
@@ -162,15 +187,42 @@ def build_batch_report(
         "",
         "## File estratti",
         "",
-        "| File sorgente | Output | Pagine | Motore | Tempo | Esito |",
-        "|---|---|---|---|---|---|",
+        "| File sorgente | Output | Pagine | Motore | Tempo | Token (In/Out) | Costo Stimato | Esito |",
+        "|---|---|---|---|---|---|---|---|",
     ]
+    
+    total_cost = 0.0
+    total_tokens_in = 0
+    total_tokens_out = 0
+    
     for e in entries:
         esito = "✔" if not e.get("error") else "✘"
+        t_in = e.get("tokens_in", 0)
+        t_out = e.get("tokens_out", 0)
+        cost = estimate_cost(e.get("engine", ""), t_in, t_out)
+        
+        total_tokens_in += t_in
+        total_tokens_out += t_out
+        total_cost += cost
+        
+        tokens_str = f"{t_in}/{t_out}" if (t_in > 0 or t_out > 0) else "—"
+        cost_str = f"${cost:.4f}" if cost > 0 else "—"
+        
         lines.append(
             f"| {e['source']} | {e.get('output', '—')} | {e.get('pages', '—')} "
-            f"| {e.get('engine', '—')} | {format_duration(e.get('duration_s', 0))} | {esito} |"
+            f"| {e.get('engine', '—')} | {format_duration(e.get('duration_s', 0))} "
+            f"| {tokens_str} | {cost_str} | {esito} |"
         )
+
+    if total_tokens_in > 0 or total_tokens_out > 0:
+        lines += [
+            "",
+            "## Consumi LLM",
+            "",
+            f"- **Token Input Totali:** {total_tokens_in:,}",
+            f"- **Token Output Totali:** {total_tokens_out:,}",
+            f"- **Costo Totale Stimato:** ${total_cost:.4f}",
+        ]
 
     if failed:
         lines += ["", "## Errori", ""]

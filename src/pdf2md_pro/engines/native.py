@@ -1,4 +1,4 @@
-"""Motore nativo: estrazione deterministica via pymupdf4llm."""
+"""Motore nativo: estrazione deterministica."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class NativeEngine:
             image_dir.mkdir(parents=True, exist_ok=True)
             kwargs.update(write_images=True, image_path=str(image_dir))
 
-        # Opzioni avanzate (ispirate a pymupdf4llm-gui)
+        # Opzioni avanzate
         kwargs["table_strategy"] = None if table_strategy == "none" else table_strategy
         if dpi:
             kwargs["dpi"] = dpi
@@ -191,9 +191,8 @@ class NativeEngine:
             try:
                 if margins:
                     # Passiamo il document ricaricato o il path. 
-                    # Siccome pymupdf4llm accetta doc, potremmo ripassare doc aperto, 
-                    # ma siccome to_markdown chiude i path e doc lo lasciamo gestire qui...
-                    # In realtà pymupdf4llm.to_markdown accetta str o doc. 
+                    # Siccome il motore accetta doc, potremmo ripassare doc aperto, 
+                    # ma siccome facciamo il fallback, ricaricare da file va bene per robustezza.
                     # Se ricarichiamo doc:
                     with pymupdf.open(pdf_path) as doc2:
                         left, top, right, bottom = margins

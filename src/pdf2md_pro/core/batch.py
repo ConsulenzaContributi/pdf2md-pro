@@ -91,7 +91,7 @@ class BatchConfig:
     rename_by_topic: bool = False  # default: il md tiene il nome del PDF originale
     llm_topic: bool = True  # con LLM attivo e rinomina per argomento, argomento dal modello
     
-    # Opzioni avanzate pymupdf4llm / cropbox
+    # Opzioni avanzate di estrazione / cropbox
     margins: tuple[float, float, float, float] | None = None  # (left, top, right, bottom)
     table_strategy: str = "lines_strict"  # lines_strict, lines, none
     use_ocr: bool = False
@@ -201,6 +201,8 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
                 "engine": result.engine,
                 "duration_s": result.duration_s,
                 "summary": summary,
+                "tokens_in": getattr(result, "tokens_in", 0),
+                "tokens_out": getattr(result, "tokens_out", 0),
             })
     return produced
 

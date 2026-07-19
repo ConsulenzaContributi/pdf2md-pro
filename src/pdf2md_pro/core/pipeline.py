@@ -32,6 +32,8 @@ class ConversionResult:
     engine: str
     pages: int
     duration_s: float
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 def _run_engines(
@@ -162,6 +164,10 @@ def convert(
         image_size_limit=image_size_limit,
         graphics_limit=graphics_limit,
     )
+    
+    total_tokens_in = sum(getattr(r, "tokens_in", 0) for r in results)
+    total_tokens_out = sum(getattr(r, "tokens_out", 0) for r in results)
+    
     frontmatter = {
         "title": stem,
         "source": pdf_path.name,
@@ -174,7 +180,7 @@ def convert(
         "config": config_summary,
     }
 
-    # link immagini relativi: pymupdf4llm scrive percorsi assoluti
+    # link immagini relativi: il motore nativo scrive percorsi assoluti
     body_parts = [
         r.markdown.replace(str(image_dir) + "/", "assets/") for r in results
     ]
@@ -215,4 +221,5 @@ def convert(
     return ConversionResult(
         markdown_path, provenance_path, image_dir, tuple(blocks),
         engine=engine_label, pages=page_count, duration_s=round(duration_s, 1),
+        tokens_in=total_tokens_in, tokens_out=total_tokens_out,
     )
