@@ -125,6 +125,7 @@ def _child_convert(payload: dict, q: multiprocessing.Queue, r_evt: multiprocessi
             ignore_images=bool(payload.get("ignore_images")),
             image_size_limit=payload.get("image_size_limit"),
             graphics_limit=payload.get("graphics_limit"),
+            brain_optimize=bool(payload.get("brain_optimize")),
         )
         control = JobControl()
         control._running = r_evt
@@ -175,6 +176,8 @@ def _pick_path(kind: str) -> dict:
     macOS via osascript; su altri OS restare sull'inserimento manuale."""
     if kind == "file":
         script = 'POSIX path of (choose file of type {"com.adobe.pdf"} with prompt "Seleziona un PDF")'
+    elif kind == "md":
+        script = 'POSIX path of (choose file with prompt "Seleziona un file Markdown (.md)")'
     else:
         script = 'POSIX path of (choose folder with prompt "Seleziona una cartella")'
     try:
@@ -266,6 +269,23 @@ class Handler(BaseHTTPRequestHandler):
                     payload.get("max_mb") or None,
                 )
                 self._send_json(200, {"files": report})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path == "/api/brain-check":  # sincrono: sola lettura del file
+            from pdf2md_pro.core.brain import check_markdown
+            target = _clean_path(payload.get("path", ""))
+            if target.suffix.lower() != ".md":
+                self._send_json(400, {"error": "serve un file .md"})
+                return
+            if not target.is_file():
+                self._send_json(400, {"error": f"file non trovato: {target}"})
+                return
+            try:
+                report = check_markdown(target.read_text(encoding="utf-8"))
+                report["file"] = target.name
+                self._send_json(200, report)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
             return

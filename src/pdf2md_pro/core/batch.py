@@ -91,6 +91,7 @@ class BatchConfig:
     ignore_images: bool = False
     image_size_limit: float | None = None
     graphics_limit: int | None = None
+    brain_optimize: bool = False  # output ottimizzato per second brain
 
 
 @dataclass
@@ -169,6 +170,7 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
                 ignore_images=config.ignore_images,
                 image_size_limit=config.image_size_limit,
                 graphics_limit=config.graphics_limit,
+                brain_optimize=config.brain_optimize,
             )
             produced.append(_deliver(job, tmp_out, work_pdf.stem))
     return produced

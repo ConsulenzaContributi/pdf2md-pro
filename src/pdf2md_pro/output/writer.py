@@ -9,8 +9,8 @@ from pathlib import Path
 def render_frontmatter(fields: dict) -> str:
     lines = ["---"]
     for key, value in fields.items():
-        if isinstance(value, str):
-            value = json.dumps(value, ensure_ascii=False)
+        if isinstance(value, (str, list)):
+            value = json.dumps(value, ensure_ascii=False)  # JSON = YAML flow valido
         lines.append(f"{key}: {value}")
     lines.append("---")
     lines.append("")

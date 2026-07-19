@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.20.0 — 2026-07-19
+### ✨ Novità
+- Nuova opzione "🧠 Ottimizza per Second Brain" (GUI e CLI `--brain`): heading normalizzati su 4 livelli con un solo titolo H1, testo ricucito tra le pagine (sillabazioni e paragrafi spezzati), intestazioni e numeri di pagina ripetuti rimossi, properties per Obsidian/Logseq (tags, aliases, type) e attribution dello strumento nel file
+- Nuova sezione "Second Brain" nella GUI: verifica se un file .md è già ottimizzato o da ottimizzare (8 criteri controllati) e spiega come dev'essere una fonte per un second brain
+### 🐛 Correzioni
+- Corretto il conteggio delle righe di provenienza quando una pagina non termina con newline
+- Il frontmatter ora serializza correttamente le liste (tags, aliases)
+
 ## v0.19.0 — 2026-07-19
 ### ✨ Novità
 - Il progetto è ora installabile come pacchetto (`pip install` dalla wheel), con licenza MIT e versione allineata automaticamente al log

@@ -65,9 +65,9 @@ const TEXT_IDS = [
   "local-model", "ollama-url", "model", "source-dir", "dest-dir", "max-files",
   "split-pages", "split-mb", "split-input", "split-interi",
   "tool-max-pages", "tool-max-mb", "adv-margins", "adv-table-strategy", "adv-dpi",
-  "adv-image-size-limit", "adv-graphics-limit"
+  "adv-image-size-limit", "adv-graphics-limit", "brain-file"
 ];
-const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images"];
+const CHECK_IDS = ["extract-images", "auto-split", "remember-key", "rename-topic", "llm-topic", "adv-use-ocr", "adv-force-ocr", "adv-ignore-images", "brain-optimize"];
 const RADIO_NAMES = ["mode", "provider"];
 
 function saveConfig() {
@@ -388,6 +388,7 @@ function buildConvertPayload(sourceDir, onlyFiles = null) {
     ignore_images: $("adv-ignore-images").checked,
     image_size_limit: num("adv-image-size-limit"),
     graphics_limit: num("adv-graphics-limit"),
+    brain_optimize: $("brain-optimize").checked,
   };
 }
 
@@ -520,6 +521,48 @@ splitBtn.addEventListener("click", () => {
       stopPolling();
     }
   });
+});
+
+// --- Second Brain: verifica ottimizzazione di un file .md ---
+$("brain-check-btn").addEventListener("click", async () => {
+  if (offlineBlocked()) return;
+  const path = $("brain-file").value.trim();
+  const report = $("brain-report");
+  if (!path) {
+    addLog("Indicare il file .md da verificare.", "err");
+    return;
+  }
+  $("brain-check-btn").disabled = true;
+  try {
+    const r = await fetch("/api/brain-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    report.replaceChildren();
+    const verdict = document.createElement("div");
+    verdict.style.cssText = "font-weight:700;margin-bottom:0.5rem;";
+    verdict.style.color = d.optimized ? "var(--ok, #3c9)" : "var(--err)";
+    verdict.textContent = d.optimized
+      ? `✅ ${d.file}: già ottimizzato per il second brain`
+      : `⚠️ ${d.file}: da ottimizzare (riconvertilo con l'opzione 🧠 attiva)`;
+    report.appendChild(verdict);
+    d.checks.forEach((c) => {
+      const row = document.createElement("div");
+      row.className = "note";
+      row.style.cssText = "font-size:0.85em;margin:0.15rem 0;";
+      row.textContent = `${c.ok ? "✔" : "✘"} ${c.label}${!c.ok && c.detail ? " — " + c.detail : ""}`;
+      row.style.color = c.ok ? "" : "var(--err)";
+      report.appendChild(row);
+    });
+    report.hidden = false;
+  } catch (e) {
+    addLog("Verifica second brain: " + fetchErrorText(e), "err");
+  } finally {
+    $("brain-check-btn").disabled = false;
+  }
 });
 
 // Avviso immediato se la pagina è stata aperta come file locale.

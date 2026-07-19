@@ -230,6 +230,8 @@
           <span>Rinomina per argomento (max 10 caratteri) invece del nome originale</span></label>
         <label class="check"><input type="checkbox" id="llm-topic" checked>
           <span>Argomento suggerito dall'LLM (se disattivo, usa un'euristica sul testo — solo con motore Ibrido/LLM totale)</span></label>
+        <label class="check"><input type="checkbox" id="brain-optimize">
+          <span>🧠 <strong>Ottimizza per Second Brain</strong> — heading H1-H4 normalizzati, testo ricucito tra le pagine, properties per Obsidian/Logseq (dettagli nella sezione Second Brain)</span></label>
       </fieldset>
 
       <fieldset class="card">
@@ -291,7 +293,48 @@
           sezione 01); <code>interi/</code> viene ignorata.</p>
       </fieldset>
 
-      <h2 class="section-title">03 · Registro</h2>
+      <h2 class="section-title">03 · Second Brain</h2>
+      <fieldset class="card">
+        <legend>Verifica ottimizzazione</legend>
+        <label>File Markdown da verificare
+          <span class="browse-row">
+            <input type="text" id="brain-file" class="mono" placeholder="/percorso/documento.md">
+            <button type="button" class="browse" data-pick="md" data-target="brain-file">Sfoglia…</button>
+          </span>
+        </label>
+        <button id="brain-check-btn" class="secondary">Verifica se è ottimizzato</button>
+        <div id="brain-report" hidden style="margin-top: 0.8rem;"></div>
+
+        <details style="margin-top: 1rem; padding: 0.8rem; background: var(--bg-inset); border: 1px solid var(--line); border-radius: var(--radius);">
+          <summary style="cursor: pointer; font-weight: 600; color: var(--accent);">Come dev'essere un file ottimizzato per un second brain?</summary>
+          <div class="note" style="margin-top: 0.8rem; font-size: 0.9em;">
+            <p>Un second brain (Obsidian, Logseq, Notion…) lavora bene solo se le fonti
+            rispettano una struttura precisa. L'opzione <strong>🧠 Ottimizza per Second
+            Brain</strong> della sezione 01 applica automaticamente questi criteri,
+            e il pulsante qui sopra li verifica su qualsiasi file .md:</p>
+            <ul style="padding-left: 1.2rem; margin-top: 0.5rem;">
+              <li><strong>Frontmatter YAML</strong> in testa al file, con <code>tags</code>,
+                <code>aliases</code> e <code>type</code>: sono le "properties" che il second
+                brain usa per collegare, filtrare e ritrovare la nota.</li>
+              <li><strong>Un solo H1</strong> (il titolo del documento): l'outline e il
+                grafo si costruiscono a partire da un titolo unico.</li>
+              <li><strong>Gerarchia H2-H4 senza salti</strong>: mai passare da H2 a H4;
+                oltre H4 l'outline diventa illeggibile, i livelli più profondi vengono riportati a H4.</li>
+              <li><strong>Testo continuo</strong>: niente parole sillabate spezzate tra le
+                pagine del PDF, niente paragrafi interrotti dal cambio pagina, niente
+                intestazioni/numeri di pagina ripetuti in mezzo al testo.</li>
+              <li><strong>Attribution</strong>: il file dichiara di essere stato estratto
+                con pdf2md-pro e ottimizzato per second brain (marcatore
+                <code>optimized: second-brain</code> nel frontmatter + nota in coda).</li>
+            </ul>
+            <p style="margin-top: 0.5rem;">La provenienza (<code>.provenance.json</code>)
+            resta valida anche dopo l'ottimizzazione: ogni blocco continua a puntare
+            alla pagina del PDF di origine.</p>
+          </div>
+        </details>
+      </fieldset>
+
+      <h2 class="section-title">04 · Registro</h2>
       <div id="log" class="log mono" aria-live="polite">
         <div class="log-line dim">In attesa di un job…</div>
       </div>

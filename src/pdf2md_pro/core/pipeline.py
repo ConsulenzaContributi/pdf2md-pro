@@ -97,6 +97,7 @@ def convert(
     ignore_images: bool = False,
     image_size_limit: float | None = None,
     graphics_limit: int | None = None,
+    brain_optimize: bool = False,
 ) -> ConversionResult:
     pdf_path = Path(pdf_path)
     out_dir = Path(out_dir)
@@ -153,6 +154,12 @@ def convert(
         r.markdown.replace(str(image_dir) + "/", "assets/") for r in results
     ]
 
+    if brain_optimize:
+        from pdf2md_pro.core.brain import brain_frontmatter, optimize_parts
+
+        body_parts = optimize_parts(body_parts, stem)
+        frontmatter = brain_frontmatter(frontmatter, "\n".join(body_parts))
+
     line = render_frontmatter(frontmatter).count("\n") + 1
     blocks = []
     for result, part in zip(results, body_parts):
@@ -166,7 +173,8 @@ def convert(
                 "md_end_line": line + max(n_lines - 1, 0),
             }
         )
-        line += n_lines + 1  # +1 per la riga vuota di separazione
+        # il join con "\n" crea la riga vuota solo se la parte finisce già con \n
+        line += n_lines + (1 if part.endswith("\n") else 0)
 
     write_output("\n".join(body_parts), frontmatter, markdown_path)
     provenance = build_provenance(

@@ -50,6 +50,7 @@ def _cmd_convert(args) -> int:
             force=args.force,
             pages=pages,
             extract_images=not args.no_images,
+            brain_optimize=args.brain,
         )
     except (ValueError, ConversionError) as exc:
         print(f"errore: {exc}", file=sys.stderr)
@@ -86,6 +87,7 @@ def _cmd_batch(args) -> int:
         split_pages=args.split_pages,
         split_mb=args.split_mb,
         extract_images=not args.no_images,
+        brain_optimize=args.brain,
     )
     try:
         summary = run_batch(config, progress=show)
@@ -149,6 +151,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_convert.add_argument("--pages")
     p_convert.add_argument("--force", action="store_true")
     p_convert.add_argument("--no-images", action="store_true")
+    p_convert.add_argument("--brain", action="store_true",
+                           help="ottimizza il markdown per un second brain (H1-H4, reflow, properties)")
     p_convert.set_defaults(fn=_cmd_convert)
 
     p_batch = sub.add_parser("batch", help="converte una cartella di PDF")
@@ -166,6 +170,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_batch.add_argument("--split-pages", type=int, default=100)
     p_batch.add_argument("--split-mb", type=float, default=10.0)
     p_batch.add_argument("--no-images", action="store_true")
+    p_batch.add_argument("--brain", action="store_true",
+                         help="ottimizza i markdown per un second brain (H1-H4, reflow, properties)")
     p_batch.set_defaults(fn=_cmd_batch)
 
     p_split = sub.add_parser(
