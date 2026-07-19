@@ -45,11 +45,20 @@ def test_dedup_header_ripetuto():
     assert "Contenuto pagina 3." in joined
 
 
-def test_attribution_presente():
-    out = optimize_parts(["contenuto."], "T")
+def test_attribution_aggiunta_da_convert(tmp_path):
+    # l'attribution (strumento, motore, tempo, config) la aggiunge
+    # pipeline.convert() per tutti i file, non optimize_parts
+    pdf = tmp_path / "doc.pdf"
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "Contenuto di prova.")
+    doc.save(pdf)
+    doc.close()
 
-    assert "pdf2md-pro" in out[-1]
-    assert "second brain" in out[-1]
+    result = convert(pdf, tmp_path / "out", extract_images=False, brain_optimize=True)
+    md = result.markdown_path.read_text(encoding="utf-8")
+
+    assert "pdf2md-pro" in md
+    assert "second brain" in md
 
 
 def test_frontmatter_arricchito():

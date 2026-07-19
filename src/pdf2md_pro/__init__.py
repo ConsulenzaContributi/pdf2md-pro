@@ -1,2 +1,2 @@
 # Versione allineata al log SemVer (archivio_versioni.xlsx / VgdV_Log).
-__version__ = "0.20.0"
+__version__ = "0.22.0"

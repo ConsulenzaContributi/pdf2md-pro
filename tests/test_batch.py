@@ -21,6 +21,11 @@ def _make_pdf(path, title, pages=1):
     doc.close()
 
 
+def _output_mds(dest):
+    """I .md prodotti dalla conversione, esclude il report unico di batch."""
+    return sorted(p.name for p in dest.glob("*.md") if not p.name.startswith("pdf2md-report_"))
+
+
 @pytest.fixture
 def folders(tmp_path):
     src = tmp_path / "src"
@@ -41,7 +46,7 @@ def test_batch_keeps_original_pdf_name_by_default(folders):
 
     assert summary["converted"] == 2
     assert summary["errors"] == []
-    md_files = sorted(p.name for p in dest.glob("*.md"))
+    md_files = _output_mds(dest)
     # il md tiene lo stesso nome del pdf originale
     assert md_files == ["a.md", "b.md"]
     assert {p.name for p in dest.glob("*.provenance.json")} == {
@@ -61,7 +66,7 @@ def test_batch_rename_by_topic_when_enabled(folders):
             source_dir=src, dest_dir=dest, extract_images=False, rename_by_topic=True
         )
     )
-    md_files = sorted(p.name for p in dest.glob("*.md"))
+    md_files = _output_mds(dest)
     assert md_files != ["a.md", "b.md"]  # rinominati per argomento
     for name in md_files:
         assert len(name.removesuffix(".md")) <= 10
@@ -73,7 +78,7 @@ def test_batch_respects_max_files(folders):
         BatchConfig(source_dir=src, dest_dir=dest, max_files=1, extract_images=False)
     )
     assert summary["converted"] == 1
-    assert len(list(dest.glob("*.md"))) == 1
+    assert len(_output_mds(dest)) == 1
 
 
 def test_batch_autosplit_produces_parts(tmp_path):
@@ -94,7 +99,7 @@ def test_batch_autosplit_produces_parts(tmp_path):
     )
     # 4 pagine, limite 2: due parti, due md distinti
     assert summary["converted"] == 2
-    assert len(list(dest.glob("*.md"))) == 2
+    assert len(_output_mds(dest)) == 2
 
 
 def test_batch_continues_after_broken_file(folders):
@@ -154,4 +159,33 @@ def test_batch_only_selected_files(folders):
         )
     )
     assert summary["converted"] == 1
-    assert sorted(p.name for p in dest.glob("*.md")) == ["a.md"]
+    assert _output_mds(dest) == ["a.md"]
+
+
+def test_batch_genera_report_unico(folders):
+    src, dest = folders
+    summary = run_batch(
+        BatchConfig(source_dir=src, dest_dir=dest, extract_images=False)
+    )
+
+    assert summary["report"] is not None
+    report_path = dest / summary["report"]
+    assert report_path.is_file()
+    text = report_path.read_text(encoding="utf-8")
+
+    assert "a.pdf" in text and "a.md" in text
+    assert "b.pdf" in text and "b.md" in text
+    assert "File processati: 2" in text
+    assert "Convertiti con successo: 2" in text
+    assert "Errori: 0" in text
+
+
+def test_batch_report_elenca_anche_i_file_falliti(folders):
+    src, dest = folders
+    (src / "rotto.pdf").write_bytes(b"non sono un pdf")
+
+    summary = run_batch(BatchConfig(source_dir=src, dest_dir=dest, extract_images=False))
+    text = (dest / summary["report"]).read_text(encoding="utf-8")
+
+    assert "Errori: 1" in text
+    assert "rotto.pdf" in text

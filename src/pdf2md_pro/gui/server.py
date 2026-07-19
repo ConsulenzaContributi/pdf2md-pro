@@ -69,6 +69,7 @@ def _reset_job(kind: str) -> None:
     _JOB.update(
         running=True, kind=kind, events=[], events_total=0, summary=None,
         error=None, done=0, total=0, current="", paused=False,
+        llm_page=None, page_durations=[],
     )
 
 
@@ -87,6 +88,17 @@ def _progress(event: dict) -> None:
             _JOB["paused"] = True
         elif status == "resumed":
             _JOB["paused"] = False
+        elif status in ("page_start", "page_done", "page_retry", "page_failed"):
+            _JOB["llm_page"] = {
+                "file": event.get("file", ""),
+                "page": event.get("page"),
+                "index": event.get("index"),
+                "total": event.get("total"),
+                "status": status,
+            }
+            if status == "page_done":
+                durations = (_JOB.get("page_durations") or []) + [event.get("elapsed", 0)]
+                _JOB["page_durations"] = durations[-8:]  # media mobile per l'ETA
 
 
 def _clean_path(raw: str) -> Path:
@@ -249,6 +261,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": f"cartella non trovata: {folder}"})
             else:
                 self._send_json(200, {"files": [p.name for p in list_pdfs(folder)]})
+        elif parsed.path == "/api/ollama-health":
+            from pdf2md_pro.engines.openrouter import DEFAULT_OLLAMA_URL, check_ollama_health
+            q = urllib.parse.parse_qs(parsed.query)
+            url = q.get("url", [DEFAULT_OLLAMA_URL])[0]
+            model = q.get("model", [None])[0]
+            self._send_json(200, check_ollama_health(url, model))
         else:
             self._send_json(404, {"error": "non trovato"})
 

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import pymupdf
 
+from pdf2md_pro import __version__
 from pdf2md_pro.core.classifier import NATIVE, classify_pdf
 from pdf2md_pro.core.provenance import build_provenance, sha256_file
+from pdf2md_pro.core.reporting import build_config_summary, build_footer
 from pdf2md_pro.engines.native import NativeEngine
 from pdf2md_pro.output.writer import render_frontmatter, write_output
 
@@ -26,6 +29,9 @@ class ConversionResult:
     provenance_path: Path
     image_dir: Path
     blocks: tuple[dict, ...]
+    engine: str
+    pages: int
+    duration_s: float
 
 
 def _run_engines(
@@ -42,6 +48,7 @@ def _run_engines(
     ignore_images: bool = False,
     image_size_limit: float | None = None,
     graphics_limit: int | None = None,
+    llm_progress=None,
 ):
     """Ritorna (risultati ordinati per pagina, etichetta motore complessivo)."""
     native = NativeEngine()
@@ -60,7 +67,7 @@ def _run_engines(
             graphics_limit=graphics_limit,
         ), native.name
     if mode == "llm":
-        return llm_engine.convert(pdf_path, pages=pages), llm_engine.name
+        return llm_engine.convert(pdf_path, pages=pages, progress=llm_progress), llm_engine.name
 
     # hybrid: parser nativo dove c'è testo, LLM su scansioni/pagine complesse
     classes = classify_pdf(pdf_path, pages)
@@ -76,7 +83,7 @@ def _run_engines(
             graphics_limit=graphics_limit,
         ))
     if llm_pages:
-        results.extend(llm_engine.convert(pdf_path, pages=llm_pages))
+        results.extend(llm_engine.convert(pdf_path, pages=llm_pages, progress=llm_progress))
     results.sort(key=lambda r: r.page_number)
     return results, f"hybrid({native.name}+{llm_engine.name})"
 
@@ -98,6 +105,7 @@ def convert(
     image_size_limit: float | None = None,
     graphics_limit: int | None = None,
     brain_optimize: bool = False,
+    llm_progress=None,
 ) -> ConversionResult:
     pdf_path = Path(pdf_path)
     out_dir = Path(out_dir)
@@ -123,6 +131,7 @@ def convert(
             raise ConversionError(f"output esistente (usa --force): {existing}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    start_time = time.monotonic()
     results, engine_label = _run_engines(
         pdf_path,
         image_dir if extract_images else None,
@@ -135,11 +144,24 @@ def convert(
         force_ocr=force_ocr,
         dpi=dpi,
         ignore_images=ignore_images,
+        llm_progress=llm_progress,
         image_size_limit=image_size_limit,
         graphics_limit=graphics_limit,
     )
+    duration_s = time.monotonic() - start_time
 
     digest = sha256_file(pdf_path)
+    config_summary = build_config_summary(
+        mode=mode,
+        margins=margins,
+        table_strategy=table_strategy,
+        use_ocr=use_ocr,
+        force_ocr=force_ocr,
+        dpi=dpi,
+        ignore_images=ignore_images,
+        image_size_limit=image_size_limit,
+        graphics_limit=graphics_limit,
+    )
     frontmatter = {
         "title": stem,
         "source": pdf_path.name,
@@ -147,6 +169,9 @@ def convert(
         "pages": page_count,
         "engine": engine_label,
         "converted": date.today().isoformat(),
+        "tool": f"pdf2md-pro v{__version__}",
+        "duration_s": round(duration_s, 1),
+        "config": config_summary,
     }
 
     # link immagini relativi: pymupdf4llm scrive percorsi assoluti
@@ -159,6 +184,10 @@ def convert(
 
         body_parts = optimize_parts(body_parts, stem)
         frontmatter = brain_frontmatter(frontmatter, "\n".join(body_parts))
+
+    if body_parts:
+        footer = build_footer(engine_label, duration_s, config_summary, second_brain=brain_optimize)
+        body_parts[-1] = body_parts[-1].rstrip("\n") + "\n" + footer
 
     line = render_frontmatter(frontmatter).count("\n") + 1
     blocks = []
@@ -183,4 +212,7 @@ def convert(
     provenance_path.write_text(
         json.dumps(provenance, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    return ConversionResult(markdown_path, provenance_path, image_dir, tuple(blocks))
+    return ConversionResult(
+        markdown_path, provenance_path, image_dir, tuple(blocks),
+        engine=engine_label, pages=page_count, duration_s=round(duration_s, 1),
+    )

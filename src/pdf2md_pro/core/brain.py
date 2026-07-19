@@ -5,7 +5,10 @@ Trasformazioni (`optimize_parts`, per pagina, provenienza preservata):
 - ricuce le sillabazioni a cavallo pagina (`paro-` / `la` → `parola`)
 - unisce i paragrafi spezzati dal cambio pagina
 - normalizza i heading: un solo H1 (il titolo), livelli H2-H4 senza salti
-- aggiunge l'attribution (estratto con pdf2md-pro, ottimizzato per second brain)
+
+L'attribution (strumento, motore, tempo, configurazione) è aggiunta una sola
+volta da `pipeline.convert()` per tutti i file, second brain o meno: non è
+responsabilità di questo modulo.
 
 `check_markdown` verifica gli stessi criteri su un file esistente e dice se è
 già ottimizzato o da ottimizzare.
@@ -22,11 +25,6 @@ MAX_HEADING_LEVEL = 4
 REPEAT_RATIO = 0.6  # riga presente in ≥60% delle pagine = header/footer corrente
 MIN_REPEAT_PAGES = 3
 BRAIN_MARKER = re.compile(r'^optimized:\s*"?second-brain"?\s*$', re.MULTILINE)
-ATTRIBUTION = (
-    "\n---\n*Estratto con [pdf2md-pro]"
-    "(https://github.com/ConsulenzaContributi/pdf2md-pro) v{version} "
-    "e ottimizzato per second brain.*\n"
-)
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 _PAGE_NUMBER = re.compile(r"^\s*(?:pagina|page)?\s*\d+\s*(?:di|of|/)?\s*\d*\s*$", re.IGNORECASE)
@@ -126,10 +124,9 @@ def optimize_parts(parts: list[str], title: str) -> list[str]:
         normalized_parts.append("\n".join(out))
     parts = normalized_parts
 
-    # titolo H1 in testa alla prima pagina, attribution in coda all'ultima
+    # titolo H1 in testa alla prima pagina; l'attribution la aggiunge pipeline.convert()
     if parts:
         parts[0] = f"# {title}\n\n" + parts[0].lstrip("\n")
-        parts[-1] = parts[-1].rstrip() + "\n" + ATTRIBUTION.format(version=__version__)
     return parts
 
 

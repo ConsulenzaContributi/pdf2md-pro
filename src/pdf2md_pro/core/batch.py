@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -51,6 +53,7 @@ class JobControl:
 
 from pdf2md_pro.core.naming import derive_topic, unique_path
 from pdf2md_pro.core.pipeline import ConversionError, convert
+from pdf2md_pro.core.reporting import build_batch_report, build_config_summary
 from pdf2md_pro.core.splitter import list_pdfs, needs_split, split_pdf
 from pdf2md_pro.engines.openrouter import (
     DEFAULT_OLLAMA_URL,
@@ -101,6 +104,7 @@ class _Job:
     llm_engine: OpenRouterEngine | None
     outputs: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    reports: list[dict] = field(default_factory=list)  # dati per il report unico di fine batch
 
 
 def _emit(job: _Job, **event) -> None:
@@ -154,9 +158,12 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
             )
             _emit(job, status="split", file=pdf.name, parts=len(work_pdfs))
 
+        def llm_page_progress(event: dict) -> None:
+            _emit(job, file=pdf.name, **event)
+
         for work_pdf in work_pdfs:
             tmp_out = tmp_dir / f"out_{work_pdf.stem}"
-            convert(
+            result = convert(
                 work_pdf,
                 tmp_out,
                 extract_images=config.extract_images,
@@ -171,8 +178,17 @@ def _convert_one(job: _Job, pdf: Path) -> list[str]:
                 image_size_limit=config.image_size_limit,
                 graphics_limit=config.graphics_limit,
                 brain_optimize=config.brain_optimize,
+                llm_progress=llm_page_progress if config.mode in ("hybrid", "llm") else None,
             )
-            produced.append(_deliver(job, tmp_out, work_pdf.stem))
+            output_name = _deliver(job, tmp_out, work_pdf.stem)
+            produced.append(output_name)
+            job.reports.append({
+                "source": work_pdf.name,
+                "output": output_name,
+                "pages": result.pages,
+                "engine": result.engine,
+                "duration_s": result.duration_s,
+            })
     return produced
 
 
@@ -210,6 +226,7 @@ def run_batch(
     pdfs = pdfs[: config.max_files]
     job = _Job(config=config, progress=progress, llm_engine=llm_engine)
     _emit(job, status="batch_start", total=len(pdfs))
+    batch_start = time.monotonic()
     
     resume_file = Path.home() / ".pdf2md" / "resume.json"
     
@@ -256,10 +273,30 @@ def run_batch(
             )
         except Exception as exc:
             job.errors.append(f"{pdf.name}: {exc}")
+            job.reports.append({"source": pdf.name, "error": str(exc)})
             _emit(job, status="error", file=pdf.name, index=index, error=str(exc))
         else:
             completed_names.add(pdf.name)
             save_resume()
+
+    report_name = None
+    if job.reports:
+        config_summary = build_config_summary(
+            mode=config.mode, margins=config.margins, table_strategy=config.table_strategy,
+            use_ocr=config.use_ocr, force_ocr=config.force_ocr, dpi=config.dpi,
+            ignore_images=config.ignore_images, image_size_limit=config.image_size_limit,
+            graphics_limit=config.graphics_limit,
+        )
+        report_text = build_batch_report(
+            str(config.source_dir), str(config.dest_dir), config_summary,
+            job.reports, time.monotonic() - batch_start,
+        )
+        report_name = f"pdf2md-report_{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+        try:
+            config.dest_dir.mkdir(parents=True, exist_ok=True)
+            (config.dest_dir / report_name).write_text(report_text, encoding="utf-8")
+        except Exception:
+            report_name = None  # il report è un bonus: non deve far fallire il batch
 
     summary = {
         "converted": len(job.outputs),
@@ -267,8 +304,9 @@ def run_batch(
         "errors": job.errors,
         "total_files": len(pdfs),
         "stopped": stopped,
+        "report": report_name,
     }
-    
+
     if not stopped:
         try:
             if resume_file.exists():

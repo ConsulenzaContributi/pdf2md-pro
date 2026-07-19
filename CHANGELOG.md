@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.22.0 — 2026-07-19
+### ✨ Novità
+- Ogni file .md riporta ora, in coda al testo, che è stato estratto con pdf2md-pro, con quale motore, in quanto tempo e con quale configurazione avanzata (in sintesi) — anche gli stessi dati nel frontmatter per una ricerca strutturata
+- Ogni conversione batch produce un report unico (`pdf2md-report_<data-ora>.md`) nella cartella di destinazione, con l'elenco di tutti i file estratti, pagine, motore usato, tempo, esito ed eventuali errori
+
+## v0.21.0 — 2026-07-19
+### ✨ Novità
+- Il motore LLM ora mostra il progresso reale, pagina per pagina, invece di restare fermo allo 0% per l'intera durata di un file: banner con "pagina X/N" e tempo stimato rimanente calcolato sui tempi reali
+- Nuovo badge "Ollama" nell'header: latenza in tempo reale, avviso se non raggiungibile o se il modello locale non è scaricato — visibile solo quando il motore locale è in uso
+- Ogni pagina ha ora un timeout proprio (60s) con 2 tentativi automatici: un crash o blocco del motore locale su una singola pagina non tiene più in ostaggio l'intero file per minuti in silenzio, e il registro mostra i tentativi falliti
+
 ## v0.20.0 — 2026-07-19
 ### ✨ Novità
 - Nuova opzione "🧠 Ottimizza per Second Brain" (GUI e CLI `--brain`): heading normalizzati su 4 livelli con un solo titolo H1, testo ricucito tra le pagine (sillabazioni e paragrafi spezzati), intestazioni e numeri di pagina ripetuti rimossi, properties per Obsidian/Logseq (tags, aliases, type) e attribution dello strumento nel file

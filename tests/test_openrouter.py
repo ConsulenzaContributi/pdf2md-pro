@@ -4,7 +4,7 @@ import pymupdf
 import pytest
 
 from pdf2md_pro.core.pipeline import convert
-from pdf2md_pro.engines.openrouter import OpenRouterEngine
+from pdf2md_pro.engines.openrouter import OpenRouterEngine, check_ollama_health
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def mixed_pdf(tmp_path):
 def engine(monkeypatch):
     eng = OpenRouterEngine(api_key="sk-test", model="z-ai/glm-4.5v")
     monkeypatch.setattr(
-        eng, "_chat", lambda content, max_tokens=4096: "# Pagina trascritta dal VLM"
+        eng, "_chat", lambda content, max_tokens=4096, timeout=None: "# Pagina trascritta dal VLM"
     )
     return eng
 
@@ -48,9 +48,12 @@ def test_engine_convert_renders_pages(engine, mixed_pdf):
 
 
 def test_engine_chat_failure_gives_placeholder(mixed_pdf, monkeypatch):
+    import pdf2md_pro.engines.openrouter as openrouter_module
+
+    monkeypatch.setattr(openrouter_module, "RETRY_BACKOFF", 0.0)  # niente attesa reale nei retry
     eng = OpenRouterEngine(api_key="sk-test")
 
-    def boom(content, max_tokens=4096):
+    def boom(content, max_tokens=4096, timeout=None):
         raise RuntimeError("rete giù")
 
     monkeypatch.setattr(eng, "_chat", boom)
@@ -115,3 +118,81 @@ def test_factory_unknown_provider():
 
     with pytest.raises(ValueError):
         make_llm_engine("boh")
+
+
+def test_convert_emette_eventi_di_progresso_per_pagina(engine, mixed_pdf):
+    events = []
+    engine.convert(mixed_pdf, pages=[1, 2], progress=events.append)
+
+    statuses = [e["status"] for e in events]
+    assert statuses == ["page_start", "page_done", "page_start", "page_done"]
+    assert events[1]["page"] == 1 and events[1]["index"] == 1 and events[1]["total"] == 2
+    assert "elapsed" in events[1]
+
+
+def test_pagina_fallita_riprova_poi_segnaposto(mixed_pdf, monkeypatch):
+    import pdf2md_pro.engines.openrouter as openrouter_module
+
+    monkeypatch.setattr(openrouter_module, "RETRY_BACKOFF", 0.0)
+    eng = OpenRouterEngine(api_key="sk-test")
+    calls = {"n": 0}
+
+    def boom(content, max_tokens=4096, timeout=None):
+        calls["n"] += 1
+        raise RuntimeError("crash runner")
+
+    monkeypatch.setattr(eng, "_chat", boom)
+    events = []
+    results = eng.convert(mixed_pdf, pages=[1], progress=events.append)
+
+    assert calls["n"] == openrouter_module.PAGE_RETRIES + 1  # 1 tentativo + N retry
+    assert results[0].confidence == 0.0
+    statuses = [e["status"] for e in events]
+    assert statuses == ["page_start", "page_retry", "page_retry", "page_failed"]
+
+
+def test_pagina_recupera_dopo_un_fallimento(mixed_pdf, monkeypatch):
+    import pdf2md_pro.engines.openrouter as openrouter_module
+
+    monkeypatch.setattr(openrouter_module, "RETRY_BACKOFF", 0.0)
+    eng = OpenRouterEngine(api_key="sk-test")
+    calls = {"n": 0}
+
+    def flaky(content, max_tokens=4096, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("crash runner")
+        return "# ripreso dopo il retry"
+
+    monkeypatch.setattr(eng, "_chat", flaky)
+    events = []
+    results = eng.convert(mixed_pdf, pages=[1], progress=events.append)
+
+    assert results[0].confidence > 0
+    assert "ripreso dopo il retry" in results[0].markdown
+    statuses = [e["status"] for e in events]
+    assert statuses == ["page_start", "page_retry", "page_done"]
+
+
+def test_check_ollama_health_irraggiungibile():
+    report = check_ollama_health(url="http://127.0.0.1:1", timeout=0.5)
+    assert report["reachable"] is False
+    assert "error" in report
+
+
+def test_check_ollama_health_raggiungibile(monkeypatch):
+    import json as json_module
+    import urllib.request
+    from io import BytesIO
+
+    class FakeResponse:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return json_module.dumps({"models": [{"name": "glm-ocr:latest"}]}).encode()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
+    report = check_ollama_health(model="glm-ocr:latest")
+
+    assert report["reachable"] is True
+    assert report["model_loaded"] is True
+    assert "glm-ocr:latest" in report["models"]

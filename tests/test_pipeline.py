@@ -42,6 +42,37 @@ def test_convert_simple_pdf(simple_pdf, tmp_path):
     assert prov["blocks"][0]["engine"] == "native"
 
 
+def test_frontmatter_riporta_strumento_motore_tempo_config(simple_pdf, tmp_path):
+    result = convert(simple_pdf, tmp_path / "out")
+    md_text = result.markdown_path.read_text(encoding="utf-8")
+
+    assert 'tool: "pdf2md-pro v' in md_text
+    assert "duration_s:" in md_text
+    assert 'config: "motore=native' in md_text
+    assert result.engine == "native"
+    assert result.pages == 1
+    assert result.duration_s >= 0
+
+
+def test_footer_nel_corpo_riporta_strumento_motore_tempo_config(simple_pdf, tmp_path):
+    result = convert(simple_pdf, tmp_path / "out")
+    md_text = result.markdown_path.read_text(encoding="utf-8")
+
+    assert "Estratto con [pdf2md-pro]" in md_text
+    assert "Motore: native" in md_text
+    assert "Tempo di elaborazione:" in md_text
+    assert "Configurazione: motore=native" in md_text
+    assert "second brain" not in md_text  # solo con brain_optimize=True
+
+
+def test_config_summary_riporta_opzioni_avanzate_attive(simple_pdf, tmp_path):
+    result = convert(simple_pdf, tmp_path / "out", dpi=300, force_ocr=True)
+    md_text = result.markdown_path.read_text(encoding="utf-8")
+
+    assert "ocr=forzato" in md_text
+    assert "dpi=300" in md_text
+
+
 def test_no_silent_overwrite(simple_pdf, tmp_path):
     out_dir = tmp_path / "out"
     convert(simple_pdf, out_dir)

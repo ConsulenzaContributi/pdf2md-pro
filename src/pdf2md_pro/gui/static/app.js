@@ -53,11 +53,60 @@ function syncConditionalFields() {
   const provider = checkedValue("provider");
   $("glmocr-fields").hidden = provider !== "glmocr";
   $("openrouter-fields").hidden = provider !== "openrouter";
+  syncOllamaBadge();
 }
 
 document
   .querySelectorAll('input[name="mode"], input[name="provider"]')
   .forEach((radio) => radio.addEventListener("change", syncConditionalFields));
+
+// --- Badge salute Ollama: visibile solo quando il motore locale è in gioco ---
+const ollamaBadge = $("ollama-badge");
+let ollamaPollTimer = null;
+
+function syncOllamaBadge() {
+  const usesOllama = checkedValue("mode") !== "native" && checkedValue("provider") === "glmocr";
+  if (usesOllama) {
+    ollamaBadge.hidden = false;
+    if (!ollamaPollTimer) {
+      pollOllamaHealth();
+      ollamaPollTimer = setInterval(pollOllamaHealth, 5000);
+    }
+  } else {
+    ollamaBadge.hidden = true;
+    clearInterval(ollamaPollTimer);
+    ollamaPollTimer = null;
+  }
+}
+
+function pollOllamaHealth() {
+  if (OFFLINE) return;
+  const url = $("ollama-url").value.trim() || "http://127.0.0.1:11434";
+  const model = $("local-model").value.trim();
+  fetch(`/api/ollama-health?url=${encodeURIComponent(url)}&model=${encodeURIComponent(model)}`, { cache: "no-store" })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d.reachable) {
+        ollamaBadge.textContent = "⏺ Ollama: non raggiungibile";
+        ollamaBadge.style.borderColor = "var(--err)";
+        ollamaBadge.style.color = "var(--err)";
+        ollamaBadge.title = "Ollama non risponde su " + url + " — verifica che sia avviato ('ollama serve').";
+        return;
+      }
+      const loaded = d.model_loaded;
+      ollamaBadge.textContent = `⏺ Ollama ${d.latency_ms}ms${loaded === false ? " · modello assente" : ""}`;
+      ollamaBadge.style.borderColor = loaded === false ? "var(--accent)" : "";
+      ollamaBadge.style.color = loaded === false ? "var(--accent)" : "";
+      ollamaBadge.title = loaded === false
+        ? `Ollama attivo, ma il modello '${model}' non risulta scaricato: ollama pull ${model}`
+        : `Ollama attivo su ${url}, ${d.models.length} modelli disponibili`;
+    })
+    .catch(() => {
+      ollamaBadge.textContent = "⏺ Ollama: errore verifica";
+      ollamaBadge.style.borderColor = "var(--err)";
+      ollamaBadge.style.color = "var(--err)";
+    });
+}
 
 // --- Persistenza impostazioni (localStorage, per questo browser locale) ---
 const CONFIG_KEY = "pdf2md-pro:config:v1";
@@ -104,6 +153,7 @@ document.querySelectorAll("input, select").forEach((el) => {
   el.addEventListener("change", saveConfig);
   el.addEventListener("input", saveConfig);
 });
+[$("ollama-url"), $("local-model")].forEach((el) => el.addEventListener("change", syncOllamaBadge));
 
 // versione (log SemVer) accanto al titolo
 fetch("/api/version")
@@ -255,8 +305,15 @@ function describe(e) {
     case "paused": return [`⏸ In pausa dopo ${e.index - 1}/${e.total} file.`, "dim"];
     case "resumed": return [`▶ Ripresa.`, "dim"];
     case "stopped": return [`⏹ Interrotto dopo ${e.index - 1}/${e.total} file.`, "err"];
+    case "page_start": return null;  // troppo frequente per il log: vedi banner/ETA
+    case "page_done": return null;
+    case "page_retry":
+      return [`  ⟳ ${e.file} pag.${e.page}: tentativo ${e.attempt} fallito (${e.error}), riprovo…`, "dim"];
+    case "page_failed":
+      return [`  ✘ ${e.file} pag.${e.page}: non convertita, tentativi esauriti (${e.error})`, "err"];
     case "batch_done": {
-      const base = `Completato: ${e.converted} md prodotti, ${e.errors.length} errori`;
+      let base = `Completato: ${e.converted} md prodotti, ${e.errors.length} errori`;
+      if (e.report) base += `\nReport dell'estrazione: ${e.report}`;
       return [e.stopped ? base + " (interrotto)" : base, e.errors.length ? "err" : "ok"];
     }
     case "split_done": {
@@ -272,21 +329,50 @@ function describe(e) {
   }
 }
 
+function formatEta(seconds) {
+  if (seconds < 60) return `~${Math.round(seconds)}s`;
+  const m = Math.round(seconds / 60);
+  return m < 60 ? `~${m} min` : `~${Math.floor(m / 60)}h ${m % 60}min`;
+}
+
 function applyState(state) {
   // il server tiene solo gli ultimi 500 eventi: l'offset riallinea il log
   const events = state.events || [];
   const total = state.events_total != null ? state.events_total : events.length;
   const offset = total - events.length;
-  events.slice(Math.max(0, renderedEvents - offset)).forEach((e) => addLog(...describe(e)));
+  events.slice(Math.max(0, renderedEvents - offset)).forEach((e) => {
+    const line = describe(e);
+    if (line) addLog(...line);
+  });
   renderedEvents = total;
 
   if (state.kind === "convert" && state.total > 0) {
     const pct = Math.round((state.done / state.total) * 100);
     bannerFill.style.width = pct + "%";
     bannerCount.textContent = `${state.done}/${state.total} · ${pct}%`;
-    if (!state.running) bannerLabel.textContent = "Conversione completata";
-    else if (state.paused) bannerLabel.textContent = "In pausa — file in corso completato";
-    else bannerLabel.textContent = `Conversione: ${state.current || "…"}`;
+    const page = state.llm_page;
+    if (!state.running) {
+      bannerLabel.textContent = "Conversione completata";
+      $("banner-eta").textContent = "";
+    } else if (state.paused) {
+      bannerLabel.textContent = "In pausa — file in corso completato";
+      $("banner-eta").textContent = "";
+    } else if (page && page.total) {
+      bannerLabel.textContent = `Conversione: ${page.file} — pagina ${page.page} (${page.index}/${page.total})`;
+      const durations = state.page_durations || [];
+      if (durations.length) {
+        const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
+        const remaining = Math.max(page.total - page.index, 0);
+        $("banner-eta").textContent = remaining > 0
+          ? `${formatEta(avg)}/pagina · ${formatEta(avg * remaining)} rimanenti`
+          : "";
+      } else {
+        $("banner-eta").textContent = "";
+      }
+    } else {
+      bannerLabel.textContent = `Conversione: ${state.current || "…"}`;
+      $("banner-eta").textContent = "";
+    }
     // controlli pausa/stop solo durante una conversione attiva
     bannerControls.hidden = !state.running;
     pauseBtn.hidden = !!state.paused;
@@ -295,6 +381,7 @@ function applyState(state) {
     bannerFill.style.width = state.running ? "35%" : "100%";
     bannerLabel.textContent = state.running ? "Partizionamento…" : "Job completato";
     bannerCount.textContent = "";
+    $("banner-eta").textContent = "";
     bannerControls.hidden = true;
   }
 

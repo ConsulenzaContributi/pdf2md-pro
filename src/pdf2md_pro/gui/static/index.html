@@ -12,6 +12,7 @@
     <div class="banner-meta">
       <span id="banner-label">In lavorazione…</span>
       <span class="banner-right">
+        <span id="banner-eta" class="mono" style="opacity:0.75;"></span>
         <span id="banner-count" class="mono"></span>
         <span id="banner-controls" hidden>
           <button type="button" id="pause-btn" class="ctrl">Pausa</button>
@@ -28,7 +29,10 @@
       <p class="tagline">Trascrizione PDF → Markdown per contenuti tecnico-accademici.<br>
         Tabelle, formule, figure descritte, provenienza per pagina.</p>
     </div>
-    <button type="button" id="restart-server-btn" class="secondary" style="border-color: var(--err); color: var(--err); margin: 0; padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Interrompe brutalmente ogni lavoro in corso e riavvia il server locale">⟳ Riavvia Server</button>
+    <div style="display:flex; align-items:center; gap:0.6rem;">
+      <span id="ollama-badge" class="mono" hidden style="font-size:0.8rem; padding:0.3rem 0.6rem; border-radius:999px; border:1px solid var(--line); white-space:nowrap;" title="Stato del server Ollama (motore GLM-OCR locale)">⏺ Ollama</span>
+      <button type="button" id="restart-server-btn" class="secondary" style="border-color: var(--err); color: var(--err); margin: 0; padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Interrompe brutalmente ogni lavoro in corso e riavvia il server locale">⟳ Riavvia Server</button>
+    </div>
   </header>
 
   <div id="resume-banner" hidden style="margin: 0 clamp(1rem, 4vw, 3rem) 1.5rem; padding: 1rem 1.5rem; background: var(--bg-inset); border: 1px solid var(--accent); border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
