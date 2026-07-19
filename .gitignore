@@ -4,7 +4,7 @@ __pycache__/
 .pytest_cache/
 dist/
 *.egg-info/
-output/
+/output/
 
 # Artefatti interni del bundle VgdV (log, blueprint, demo, report): locali, non pubblici
 archivio_versioni.xlsx
